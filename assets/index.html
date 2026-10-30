@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code 会话</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23c96442'/><path d='M9 21.5c0-6 4.5-11 12-11-1 6.5-5.5 11-12 11z' fill='%23fff'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="brand" type="button" id="brand" title="返回会话列表">
+    <span class="brand-mark">◒</span>
+    <span class="brand-name">Claude Code 会话</span>
+  </button>
+
+  <div class="search-wrap" id="search-wrap">
+    <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zm0 1.6a3.9 3.9 0 1 0 0 7.8 3.9 3.9 0 0 0 0-7.8zM12.7 12.7l4 4-1.1 1.1-4-4z"/></svg>
+    <input id="search" type="search" placeholder="搜索标题、目录、消息内容、会话 ID…" autocomplete="off" spellcheck="false">
+    <button id="clear-search" class="clear-btn" title="清除" hidden>×</button>
+  </div>
+
+  <div class="topbar-actions">
+    <select id="sort" title="排序">
+      <option value="recent">最近活动</option>
+      <option value="created">创建时间</option>
+      <option value="messages">消息数</option>
+      <option value="size">文件大小</option>
+      <option value="title">标题</option>
+    </select>
+    <button id="sort-dir" class="icon-btn" title="切换升序 / 倒序">↓</button>
+    <button id="rescan" class="icon-btn" title="重新扫描磁盘">⟳</button>
+    <button id="trash-btn" class="btn ghost" title="回收站">回收站</button>
+    <button id="theme-btn" class="icon-btn" title="切换主题">◐</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <span>项目</span>
+      <span class="side-count" id="project-count"></span>
+    </div>
+    <nav id="projects" class="projects"></nav>
+    <div class="side-foot" id="side-foot"></div>
+  </aside>
+
+  <main class="main" id="main">
+
+    <!-- list view -->
+    <section id="list-view">
+      <div class="list-head">
+        <div class="list-summary" id="list-summary"></div>
+        <div class="list-tools">
+          <button class="btn update-chip" id="update-chip" hidden>列表有更新</button>
+          <label class="chk" id="select-all-wrap" hidden>
+            <input type="checkbox" id="select-all"> 全选
+          </label>
+          <button class="btn ghost" id="bulk-star" hidden>★ 收藏</button>
+          <button class="btn ghost" id="bulk-unstar" hidden>☆ 取消收藏</button>
+          <button class="btn danger" id="bulk-delete" hidden>删除所选 <span id="bulk-count"></span></button>
+        </div>
+      </div>
+      <div id="sessions" class="sessions"></div>
+      <div id="empty" class="empty" hidden></div>
+    </section>
+
+    <!-- detail view -->
+    <section id="detail-view" hidden>
+      <header class="detail-head">
+        <button class="icon-btn back" id="back" title="返回 (Esc)">←</button>
+        <div class="detail-headings">
+          <h1 id="d-title"></h1>
+          <div class="detail-sub" id="d-sub"></div>
+        </div>
+        <div class="detail-actions">
+          <div class="conv-search">
+            <input id="conv-search" type="search" placeholder="在会话内搜索…" autocomplete="off" spellcheck="false">
+            <span class="conv-search-count" id="conv-search-count"></span>
+          </div>
+          <button class="icon-btn star-btn" id="d-star" title="收藏 / 备注">☆</button>
+          <button class="btn ghost" id="turns-toggle" title="展开所有轮次">⊞ 展开全部</button>
+          <button class="icon-btn" id="open-terminal" type="button" title="在系统终端中打开（claude --resume）">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M6.6 9.6l2.6 2.4-2.6 2.4M12.2 14.6h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="btn" id="copy-resume" title="复制继续对话的命令">复制 resume</button>
+          <button class="btn" id="export-md" title="导出为 Markdown">导出 MD</button>
+          <button class="btn danger ghost" id="delete-one">删除</button>
+        </div>
+      </header>
+
+      <div class="detail-meta" id="d-meta"></div>
+
+      <div class="detail-body">
+        <div class="conv" id="conv"></div>
+        <aside class="outline" id="outline">
+          <div class="outline-head">会话大纲</div>
+          <nav id="outline-list" class="outline-list"></nav>
+        </aside>
+      </div>
+      <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
+
+      <div class="jump-nav" id="jump-nav" hidden>
+        <button class="jump-btn" id="jump-top" type="button" title="回到顶部">↑</button>
+        <button class="jump-btn" id="jump-bottom" type="button" title="回到底部">↓</button>
+      </div>
+    </section>
+
+    <!-- trash view -->
+    <section id="trash-view" hidden>
+      <div class="list-head">
+        <div class="list-summary" id="trash-summary"></div>
+        <div class="list-tools">
+          <label class="chk" id="trash-all-wrap" hidden>
+            <input type="checkbox" id="trash-all"> 全选
+          </label>
+          <button class="btn ghost" id="trash-restore" hidden>恢复所选</button>
+          <button class="btn danger" id="trash-purge" hidden>彻底删除</button>
+          <button class="btn danger ghost" id="trash-empty">清空回收站</button>
+          <button class="btn" id="trash-back">← 返回会话</button>
+        </div>
+      </div>
+      <div id="trash-list" class="sessions"></div>
+    </section>
+
+  </main>
+</div>
+
+<div id="hovercard" class="hovercard" hidden></div>
+<div id="stale-bar" class="stale-bar" hidden>
+  服务已更新，当前页面是旧版本 <button class="btn" id="stale-reload">刷新</button>
+</div>
+<div id="toast" class="toast" hidden></div>
+<dialog id="fav-dialog">
+  <form method="dialog">
+    <h2 id="fav-title">收藏会话</h2>
+    <p class="fav-sub" id="fav-sub"></p>
+    <label class="field">
+      <span>备注<em>可留空</em></span>
+      <input id="fav-note" type="text" placeholder="为什么留着它…" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="dialog-actions">
+      <button class="btn ghost" type="submit" value="unstar" id="fav-unstar" hidden>取消收藏</button>
+      <button class="btn ghost" type="submit" value="cancel">取消</button>
+      <button class="btn" type="submit" value="ok" id="fav-ok">收藏</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog">
+  <form method="dialog">
+    <h2 id="cf-title">确认</h2>
+    <p id="cf-body"></p>
+    <div class="dialog-actions">
+      <button class="btn ghost" value="cancel">取消</button>
+      <button class="btn danger" value="ok" id="cf-ok">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

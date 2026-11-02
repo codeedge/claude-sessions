@@ -632,7 +632,10 @@ body.jump-inside .outline { padding-right: 54px; }
   overflow: hidden;
 }
 .hc-head { flex: 0 0 auto; margin-bottom: 10px; }
-.hc-title { font-weight: 600; font-size: 13.5px; line-height: 1.35; margin-bottom: 2px; }
+.hc-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-rename { margin-left: 2px; opacity: .55; }
+.hc-rename:hover { opacity: 1; }
+.hc-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13.5px; line-height: 1.35; margin-bottom: 2px; }
 .hc-path {
   font-family: var(--mono); font-size: 11px; color: var(--fg-faint);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

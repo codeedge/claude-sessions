@@ -362,7 +362,7 @@ function init() {
   });
   $('#bulk-star').addEventListener('click', () => bulkStar(true));
   $('#bulk-unstar').addEventListener('click', () => bulkStar(false));
-  $('#d-star').addEventListener('click', () => { if (S.detailId) openFavDialog(S.detailId); });
+  $('#d-star').addEventListener('click', () => { if (S.detailId) toggleStar(S.detailId); });
   $('#conv-search').addEventListener('input', debounce(onConvSearch, 240));
   $('#conv-search').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); jumpNextHit(); }
@@ -598,8 +598,14 @@ function hoverCardHTML(item, data) {
 
   return `<div class="hc-head">
       <div class="hc-title">
-        <button class="star-btn${starred ? ' on' : ''}" type="button" data-hc-star="${esc(item.id)}" title="${starred ? '已收藏 · 编辑备注' : '收藏'}">${starred ? STAR_FILLED : STAR_OUTLINE}</button>
-        ${esc(item.title || '(无标题会话)')}
+        <button class="star-btn${starred ? ' on' : ''}" type="button" data-hc-star="${esc(item.id)}" title="${starred ? '取消收藏' : '收藏'}">${starred ? STAR_FILLED : STAR_OUTLINE}</button>
+        <span class="hc-name">${esc(item.title || '(无标题会话)')}</span>
+        <button class="icon-btn hc-rename" type="button" data-hc-rename="${esc(item.id)}" title="重命名（写入会话文件，和 CLI 的 /rename 一致）">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <path d="M13.5 6.5l3 3" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </button>
       </div>
       <div class="hc-path">${esc(item.cwd || item.project || '')}${item.branch ? ' · ' + esc(item.branch) : ''}</div>
       <div class="hc-meta">${esc(meta)} ${live}</div>
@@ -608,8 +614,8 @@ function hoverCardHTML(item, data) {
     <div class="hc-body">${body}</div>
     <div class="hc-actions">
       <button class="btn" type="button" data-hc-open="${esc(item.id)}">打开会话</button>
-      <button class="btn ghost" type="button" data-hc-mark="${esc(item.id)}" title="收藏并填写备注">${starred ? '备注' : '收藏'}</button>
-      <button class="btn ghost" type="button" data-hc-rename="${esc(item.id)}" title="重命名（只改显示名）">改名</button>
+      <button class="btn ghost" type="button" data-hc-star2="${esc(item.id)}">${starred ? '取消收藏' : '收藏'}</button>
+      <button class="btn ghost" type="button" data-hc-note="${esc(item.id)}" title="只写备注，不影响收藏">备注</button>
       <button class="btn danger" type="button" data-hc-del="${esc(item.id)}" ${starred ? 'disabled title="已收藏，取消收藏后才能删除"' : ''}>删除</button>
       <span class="hc-hint">${starred ? '★ 已收藏' : '可撤销'}</span>
     </div>`;
@@ -652,21 +658,28 @@ function positionHoverCard(row) {
 }
 
 function onHoverCardClick(e) {
+  const star2 = e.target.closest('[data-hc-star2]');
+  if (star2) {
+    hideHoverCard();
+    toggleStar(star2.dataset.hcStar2);
+    return;
+  }
+  const noteBtn = e.target.closest('[data-hc-note]');
+  if (noteBtn) {
+    hideHoverCard();
+    openNoteDialog(noteBtn.dataset.hcNote);
+    return;
+  }
   const starBtn = e.target.closest('[data-hc-star]');
   if (starBtn) {
-    openFavDialog(starBtn.dataset.hcStar);
+    hideHoverCard();
+    toggleStar(starBtn.dataset.hcStar);
     return;
   }
   const openBtn = e.target.closest('[data-hc-open]');
   if (openBtn) {
     hideHoverCard();
     openDetail(openBtn.dataset.hcOpen);
-    return;
-  }
-  const markBtn = e.target.closest('[data-hc-mark]');
-  if (markBtn) {
-    hideHoverCard();
-    openFavDialog(markBtn.dataset.hcMark);
     return;
   }
   const renameBtn = e.target.closest('[data-hc-rename]');
@@ -870,7 +883,7 @@ function onListClick(e) {
   const starBtn = e.target.closest('[data-star]');
   if (starBtn) {
     e.stopPropagation();
-    openFavDialog(starBtn.dataset.star);
+    toggleStar(starBtn.dataset.star);
     return;
   }
   const row = e.target.closest('.row');
@@ -1049,22 +1062,22 @@ function openRenameDialog(id) {
   }, { once: true });
 }
 
-async function setStarred(id, starred, note) {
+// 收藏只是收藏：只改 starred，不碰备注
+async function toggleStar(id) {
+  const cur = (S.marks[id] && S.marks[id].starred) || (S.items.find((i) => i.id === id) || {}).starred;
+  const starred = !cur;
   try {
-    const res = await api('/api/marks', {
+    await api('/api/marks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates: [{ id, starred, note }] }),
+      body: JSON.stringify({ updates: [{ id, starred }] }),
     });
-    // Apply what we asked for: the server returns {} once a mark is removed,
-    // which would merge into the old values and leave the UI unchanged.
-    applyMark(id, { starred, note: starred ? (note || '') : '' });
-    toast(starred ? (note ? '已收藏（含备注）' : '已收藏') : '已取消收藏');
+    applyMark(id, { starred });
+    toast(starred ? '已收藏' : '已取消收藏');
   } catch (err) {
     toast('保存失败: ' + err.message, true);
   }
 }
 
-// Keep every view that shows this session in sync after a mark change.
 function applyMark(id, patch) {
   const existing = S.marks[id] || {};
   const merged = { ...existing, ...patch };
@@ -1626,17 +1639,16 @@ async function deleteOne() {
 }
 
 /* ------------------------------------------------------------ mark dialog */
-function openFavDialog(id) {
+function openNoteDialog(id) {
   const item = (S.detail && S.detail.id === id) ? S.detail : S.items.find((i) => i.id === id);
   const m = S.marks[id] || {};
-  const starred = !!(m.starred || (item && item.starred));
   const dlg = $('#fav-dialog');
 
-  $('#fav-title').textContent = starred ? '编辑收藏' : '收藏会话';
+  $('#fav-title').textContent = '备注';
   $('#fav-sub').textContent = truncate(item?.title || id, 64);
   $('#fav-note').value = m.note || (item && item.note) || '';
-  $('#fav-ok').textContent = starred ? '保存' : '收藏';
-  $('#fav-unstar').hidden = !starred;
+  $('#fav-ok').textContent = '保存';
+  $('#fav-unstar').hidden = true;
 
   dlg.returnValue = 'cancel';
   dlg.showModal();
@@ -1644,13 +1656,18 @@ function openFavDialog(id) {
   $('#fav-note').select();
 
   dlg.addEventListener('close', async () => {
-    const v = dlg.returnValue;
-    if (v === 'cancel') return;
-    if (v === 'unstar') {
-      await setStarred(id, false, '');
-      return;
+    if (dlg.returnValue !== 'ok') return;
+    const note = $('#fav-note').value.trim();
+    try {
+      await api('/api/marks', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ id, note }] }),
+      });
+      applyMark(id, { note });
+      toast(note ? '备注已保存' : '备注已清空');
+    } catch (err) {
+      toast('保存失败: ' + err.message, true);
     }
-    await setStarred(id, true, $('#fav-note').value.trim());
   }, { once: true });
 }
 

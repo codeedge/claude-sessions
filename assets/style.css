@@ -443,9 +443,28 @@ body.no-outline .outline { display: none; }
 
 /* 会话里的图片 */
 .turn-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
-.turn-img { display: block; line-height: 0; border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; }
+.turn-img { display: block; line-height: 0; padding: 0; cursor: zoom-in;
+  border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; background: none; }
 .turn-img img { max-width: 100%; max-height: 420px; display: block; }
 .turn-img:hover { border-color: var(--accent); }
+
+/* 图片灯箱：当前页放大，点空白处/Esc 关闭 */
+#img-viewer {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4vh 4vw;
+  background: rgba(0, 0, 0, .82);
+  cursor: zoom-out;
+  backdrop-filter: blur(2px);
+}
+#img-viewer img {
+  max-width: 92vw; max-height: 92vh;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
+  cursor: default;
+  background: var(--bg-1);
+}
+body.viewer-open { overflow: hidden; }
 
 /* 未加载轮次之间的占位块 */
 .turn-gap {

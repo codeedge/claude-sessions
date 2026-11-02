@@ -339,6 +339,17 @@ function init() {
   $('#back').addEventListener('click', closeDetail);
   $('#turns-toggle').addEventListener('click', toggleAllDetails);
   $('#conv').addEventListener('click', onGapClick);
+  $('#conv').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-img]');
+    if (btn) { e.preventDefault(); openImageViewer(btn.dataset.img); }
+  });
+  $('#img-viewer').addEventListener('click', (e) => {
+    // 只有点在图片本身之外（空白/遮罩）才关闭
+    if (e.target.id !== 'img-viewer-img') closeImageViewer();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeImageViewer();
+  });
   $('#jump-top').addEventListener('click', () => $('#main').scrollTo({ top: 0, behavior: 'smooth' }));
   $('#jump-bottom').addEventListener('click', () => {
     const m = $('#main');
@@ -1321,6 +1332,22 @@ function renderBlocks(blocks) {
   return out.join('');
 }
 
+// 点图在当前页放大，点空白处或 Esc 关掉
+function openImageViewer(src) {
+  const box = $('#img-viewer');
+  $('#img-viewer-img').src = src;
+  box.hidden = false;
+  document.body.classList.add('viewer-open');
+}
+
+function closeImageViewer() {
+  const box = $('#img-viewer');
+  if (box.hidden) return;
+  box.hidden = true;
+  document.body.classList.remove('viewer-open');
+  $('#img-viewer-img').src = '';
+}
+
 // 会话里的图片：按需向服务端要，滚动到可见时才加载
 function imgHTML(media, index) {
   if (index === undefined || index === null || !S.detailId) {
@@ -1329,9 +1356,9 @@ function imgHTML(media, index) {
   const qs = new URLSearchParams({ i: String(index) });
   if (S.agent) qs.set('agent', S.agent);
   const src = `/api/sessions/${encodeURIComponent(S.detailId)}/image?` + qs.toString();
-  return `<a class="turn-img" href="${src}" target="_blank" rel="noopener">
+  return `<button class="turn-img" type="button" data-img="${esc(src)}" title="点击放大">
     <img loading="lazy" src="${src}" alt="${esc(media || '图片')}">
-  </a>`;
+  </button>`;
 }
 
 function oneLine(s) {

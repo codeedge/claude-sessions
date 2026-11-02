@@ -20,6 +20,7 @@ var (
 	needleUser = []byte(`"type":"user"`)
 	needleAsst = []byte(`"type":"assistant"`)
 	needleTitl = []byte(`"type":"ai-title"`)
+	needleName = []byte(`"type":"custom-title"`)
 	needleCost = []byte(`"type":"cost-state"`)
 )
 
@@ -39,6 +40,7 @@ type rawRecord struct {
 	IsSidechain bool            `json:"isSidechain"`
 	IsMeta      bool            `json:"isMeta"`
 	AITitle     string          `json:"aiTitle"`
+	CustomTitle string          `json:"customTitle"`
 	Message     json.RawMessage `json:"message"`
 	ModelUsage  map[string]struct {
 		InputTokens  int `json:"inputTokens"`
@@ -86,6 +88,7 @@ func eachRecord(path string, fn func(line []byte)) error {
 		if !bytes.Contains(line, needleUser) &&
 			!bytes.Contains(line, needleAsst) &&
 			!bytes.Contains(line, needleTitl) &&
+			!bytes.Contains(line, needleName) &&
 			!bytes.Contains(line, needleCost) {
 			continue
 		}
@@ -285,6 +288,7 @@ type metaAcc struct {
 	last        time.Time
 	title       string
 	firstPrompt string
+	customTitle string // /rename 设置的会话名，优先于 ai-title
 	ctxTokens   int    // 最后一条 assistant 的输入侧 token，约等于当前上下文占用
 	modelKey    string // cost-state 里的模型名，可能带 [1m] 窗口后缀
 }
@@ -307,6 +311,11 @@ func (a *metaAcc) consumeRecord(line []byte) {
 		}
 		if best != "" {
 			a.modelKey = best
+		}
+	case "custom-title":
+		// /rename 写的自定义名字，优先级高于自动生成的 ai-title
+		if rec.CustomTitle != "" {
+			a.customTitle = rec.CustomTitle
 		}
 	case "ai-title":
 		if rec.AITitle != "" {
@@ -393,7 +402,14 @@ func (a *metaAcc) finish(fi os.FileInfo, prev *SessionInfo, offset int64) *Sessi
 		info.FirstPrompt = prev.FirstPrompt
 	}
 
-	if a.title != "" {
+	info.customTitle = a.customTitle
+	if info.customTitle == "" && prev != nil {
+		info.customTitle = prev.customTitle
+	}
+
+	if info.customTitle != "" {
+		info.Title = info.customTitle
+	} else if a.title != "" {
 		info.Title = a.title
 	} else if prev != nil && prev.Title != "" {
 		info.Title = prev.Title

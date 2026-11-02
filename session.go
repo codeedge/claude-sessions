@@ -93,6 +93,7 @@ type SessionInfo struct {
 	parsedOffset  int64  `json:"-"` // bytes already folded into this entry
 	subagentStamp int64  `json:"-"` // subagents dir mtime when last scanned
 	modelKey      string `json:"-"` // model id from cost-state, carries the window suffix
+	customTitle   string `json:"-"` // /rename 设置的名字，优先于 ai-title
 	searchText    string `json:"-"` // ASCII-lowercased conversation text, byte-aligned with source
 }
 

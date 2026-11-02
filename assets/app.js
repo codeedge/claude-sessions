@@ -1027,8 +1027,9 @@ function openRenameDialog(id) {
   const m = S.marks[id] || {};
   const dlg = $('#rename-dialog');
 
-  $('#rename-input').value = m.title || '';
-  $('#rename-sub').textContent = '原标题：' + truncate(item?.originalTitle || item?.title || id, 60);
+  // 预填当前名字，方便在原基础上改
+  $('#rename-input').value = (item && item.title) || '';
+  $('#rename-sub').textContent = item && item.cwd ? item.cwd : '';
   dlg.returnValue = 'cancel';
   dlg.showModal();
   $('#rename-input').focus();

@@ -387,25 +387,17 @@ func (ix *Index) List(opts ListOpts) ([]Hit, int, int64) {
 			continue
 		}
 
-		// 用户改过名就用自定义标题，同时让搜索能命中它
-		sess := *s
-		if mark.Title != "" {
-			sess.Title = mark.Title
-		}
-
 		totalSize += s.Size
 		if len(tokens) > 0 {
-			n, snippet := matchSession(&sess, tokens)
+			n, snippet := matchSession(s, tokens)
 			if n == 0 {
 				continue
 			}
-			hits = append(hits, Hit{SessionInfo: sess, Snippet: snippet, Matches: n,
-				OriginalTitle: s.Title,
-				Starred:       mark.Starred, Tags: mark.Tags, Note: mark.Note})
+			hits = append(hits, Hit{SessionInfo: *s, Snippet: snippet, Matches: n,
+				Starred: mark.Starred, Tags: mark.Tags, Note: mark.Note})
 			continue
 		}
-		hits = append(hits, Hit{SessionInfo: sess, OriginalTitle: s.Title,
-			Starred: mark.Starred, Tags: mark.Tags, Note: mark.Note})
+		hits = append(hits, Hit{SessionInfo: *s, Starred: mark.Starred, Tags: mark.Tags, Note: mark.Note})
 	}
 
 	// Each key has a natural order (newest / biggest first, titles A→Z); Asc

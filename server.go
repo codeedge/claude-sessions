@@ -59,6 +59,74 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/trash/restore", s.handleRestore)
 	s.mux.HandleFunc("POST /api/trash/purge", s.handlePurge)
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
+	s.mux.HandleFunc("POST /api/rename", s.handleRename)
+}
+
+// handleRename 把新名字写进会话文件，和 Claude Code 的 /rename 完全一致：
+// 追加一条 {"type":"custom-title","customTitle":...,"sessionId":...}
+// 所以 CLI 的 resume 列表、终端标签都会跟着变。只追加，不重写文件。
+func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&req); err != nil {
+		writeErr(w, 400, "请求体解析失败")
+		return
+	}
+	if !sessionIDRe.MatchString(req.ID) {
+		writeErr(w, 400, "会话 ID 不合法")
+		return
+	}
+	title := strings.TrimSpace(strings.NewReplacer("\n", " ", "\r", " ", "\t", " ").Replace(req.Title))
+	if len([]rune(title)) > maxTitleLen {
+		title = string([]rune(title)[:maxTitleLen])
+	}
+	if title == "" {
+		writeErr(w, 400, "名字不能为空")
+		return
+	}
+	info, ok := s.ix.Get(req.ID)
+	if !ok {
+		writeErr(w, 404, "会话不存在")
+		return
+	}
+
+	rec, err := json.Marshal(struct {
+		Type        string `json:"type"`
+		CustomTitle string `json:"customTitle"`
+		SessionID   string `json:"sessionId"`
+	}{"custom-title", title, req.ID})
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	f, err := os.OpenFile(info.Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		writeErr(w, 500, "打开会话文件失败: "+err.Error())
+		return
+	}
+	defer f.Close()
+
+	// 文件末尾没有换行时先补一个，避免和新记录粘成一行
+	prefix := ""
+	if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+		if rf, err := os.Open(info.Path); err == nil {
+			last := make([]byte, 1)
+			if _, err := rf.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+				prefix = "\n"
+			}
+			rf.Close()
+		}
+	}
+	if _, err := f.WriteString(prefix + string(rec) + "\n"); err != nil {
+		writeErr(w, 500, "写入失败: "+err.Error())
+		return
+	}
+
+	s.ix.MaybeRescan(0) // 只读新增字节，很快
+	writeJSON(w, 200, map[string]string{"id": req.ID, "title": title})
 }
 
 // handleOpen 在系统终端里直接打开一个会话（claude --resume <id>）。
@@ -220,12 +288,7 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 	if d.Turns == nil {
 		d.Turns = []Turn{}
 	}
-	m := s.marks.Get(id)
-	fillMark(&d.Starred, &d.Tags, &d.Note, m)
-	if m.Title != "" {
-		d.OriginalTitle = d.Title
-		d.Title = m.Title
-	}
+	fillMark(&d.Starred, &d.Tags, &d.Note, s.marks.Get(id))
 	writeJSON(w, 200, d)
 }
 
@@ -411,7 +474,6 @@ type markUpdate struct {
 	Starred *bool     `json:"starred,omitempty"`
 	Tags    *[]string `json:"tags,omitempty"`
 	Note    *string   `json:"note,omitempty"`
-	Title   *string   `json:"title,omitempty"`
 }
 
 func (s *Server) handleUpdateMarks(w http.ResponseWriter, r *http.Request) {
@@ -439,7 +501,7 @@ func (s *Server) handleUpdateMarks(w http.ResponseWriter, r *http.Request) {
 		if u.ID == "" {
 			continue
 		}
-		m, err := s.marks.Set(u.ID, u.Starred, u.Tags, u.Note, u.Title)
+		m, err := s.marks.Set(u.ID, u.Starred, u.Tags, u.Note)
 		if err != nil {
 			writeErr(w, 500, "保存标记失败: "+err.Error())
 			return

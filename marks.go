@@ -17,12 +17,11 @@ type Mark struct {
 	Starred   bool      `json:"starred,omitempty"`
 	Tags      []string  `json:"tags,omitempty"`
 	Note      string    `json:"note,omitempty"`
-	Title     string    `json:"title,omitempty"` // 自定义显示名，替代 Claude Code 生成/rename 的标题
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
 func (m Mark) empty() bool {
-	return !m.Starred && len(m.Tags) == 0 && m.Note == "" && m.Title == ""
+	return !m.Starred && len(m.Tags) == 0 && m.Note == ""
 }
 
 type markFile struct {
@@ -131,7 +130,7 @@ func (s *MarkStore) All() map[string]Mark {
 }
 
 // Set applies a partial update. Nil fields are left untouched.
-func (s *MarkStore) Set(id string, starred *bool, tags *[]string, note, title *string) (Mark, error) {
+func (s *MarkStore) Set(id string, starred *bool, tags *[]string, note *string) (Mark, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reloadIfChanged()
@@ -147,12 +146,6 @@ func (s *MarkStore) Set(id string, starred *bool, tags *[]string, note, title *s
 		m.Note = strings.TrimSpace(*note)
 		if len([]rune(m.Note)) > maxNoteLen {
 			m.Note = string([]rune(m.Note)[:maxNoteLen])
-		}
-	}
-	if title != nil {
-		m.Title = strings.TrimSpace(*title)
-		if len([]rune(m.Title)) > maxTitleLen {
-			m.Title = string([]rune(m.Title)[:maxTitleLen])
 		}
 	}
 	m.UpdatedAt = time.Now()

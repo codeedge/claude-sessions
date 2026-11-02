@@ -1024,15 +1024,27 @@ function openRenameDialog(id) {
   dlg.addEventListener('close', async () => {
     if (dlg.returnValue !== 'ok') return;
     const title = $('#rename-input').value.trim();
+    if (!title) {
+      toast('名字不能为空', true);
+      return;
+    }
     try {
-      await api('/api/marks', {
+      await api('/api/rename', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: [{ id, title }] }),
+        body: JSON.stringify({ id, title }),
       });
-      applyMark(id, { title });
-      toast(title ? `已重命名为「${truncate(title, 24)}」` : '已恢复原标题');
+      // 会话文件里已经多了一条 custom-title，重扫后再渲染
+      const it = S.items.find((i) => i.id === id);
+      if (it) it.title = title;
+      if (S.detail && S.detail.id === id) {
+        S.detail.title = title;
+        $('#d-title').textContent = title;
+      }
+      renderList();
+      renderOutline();
+      toast(`已重命名为「${truncate(title, 24)}」`);
     } catch (err) {
-      toast('保存失败: ' + err.message, true);
+      toast('改名失败: ' + err.message, true);
     }
   }, { once: true });
 }
@@ -1056,7 +1068,7 @@ async function setStarred(id, starred, note) {
 function applyMark(id, patch) {
   const existing = S.marks[id] || {};
   const merged = { ...existing, ...patch };
-  const clean = !merged.starred && !(merged.tags || []).length && !merged.note && !merged.title;
+  const clean = !merged.starred && !(merged.tags || []).length && !merged.note;
   if (clean) delete S.marks[id];
   else S.marks[id] = merged;
 
@@ -1065,16 +1077,11 @@ function applyMark(id, patch) {
     it.starred = !!merged.starred;
     it.tags = merged.tags || [];
     it.note = merged.note || '';
-    if (it.originalTitle === undefined) it.originalTitle = it.title;
-    it.title = merged.title || it.originalTitle || it.title;
   }
   if (S.detail && S.detail.id === id) {
     S.detail.starred = !!merged.starred;
     S.detail.tags = merged.tags || [];
     S.detail.note = merged.note || '';
-    if (S.detail.originalTitle === undefined) S.detail.originalTitle = S.detail.title;
-    S.detail.title = merged.title || S.detail.originalTitle || S.detail.title;
-    $('#d-title').textContent = S.detail.title || '(无标题会话)';
   }
   renderList();
   renderProjects();

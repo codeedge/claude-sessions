@@ -100,26 +100,24 @@ type SessionInfo struct {
 // Hit is a search result: a session plus a snippet of the matching region.
 type Hit struct {
 	SessionInfo
-	Snippet       string   `json:"snippet,omitempty"`
-	Matches       int      `json:"matches"`
-	OriginalTitle string   `json:"originalTitle,omitempty"` // 未改名前会话自带的标题
-	Starred       bool     `json:"starred,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	Note          string   `json:"note,omitempty"`
+	Snippet string   `json:"snippet,omitempty"`
+	Matches int      `json:"matches"`
+	Starred bool     `json:"starred,omitempty"`
+	Tags    []string `json:"tags,omitempty"`
+	Note    string   `json:"note,omitempty"`
 }
 
 // SessionDetail is returned when opening a conversation.
 type SessionDetail struct {
 	SessionInfo
-	OriginalTitle string   `json:"originalTitle,omitempty"`
-	Starred       bool     `json:"starred,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	Note          string   `json:"note,omitempty"`
-	Turns         []Turn   `json:"turns"`
-	TotalTurns    int      `json:"totalTurns"`
-	From          int      `json:"from"`
-	Subagent      bool     `json:"subagent,omitempty"`
-	AgentType     string   `json:"agentType,omitempty"`
+	Starred    bool     `json:"starred,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	Note       string   `json:"note,omitempty"`
+	Turns      []Turn   `json:"turns"`
+	TotalTurns int      `json:"totalTurns"`
+	From       int      `json:"from"`
+	Subagent   bool     `json:"subagent,omitempty"`
+	AgentType  string   `json:"agentType,omitempty"`
 }
 
 // TrashEntry describes a soft-deleted session.

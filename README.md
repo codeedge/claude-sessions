@@ -177,7 +177,9 @@ Claude Code 只是往 `.jsonl` 里追加，所以扫描是**增量**的：
 
 ## 数据来源
 
-只读 Claude Code 的既有文件，不修改其格式：
+基本只读 Claude Code 的文件，唯一会写入的动作是**重命名**（见下）：
+
+
 
 ```
 ~/.claude/
@@ -187,7 +189,19 @@ Claude Code 只是往 `.jsonl` 里追加，所以扫描是**增量**的：
 └── history.jsonl                                     输入历史（本工具未用）
 ```
 
-`projects/*.jsonl` 每行一条 JSON 记录，本工具只取 `user` / `assistant` / `ai-title` 三类，其余（`attachment`、`api-request-blob`、`file-history-delta`、`mode` 等）在建索引阶段就按字节跳过。
+`projects/*.jsonl` 每行一条 JSON 记录，建索引时只解析 `user` / `assistant` / `ai-title` / `custom-title` / `cost-state`，其余（`attachment`、`api-request-blob`、`file-history-delta`、`mode` 等）按字节跳过。
+
+### 唯一的写入：重命名
+
+重命名会在会话文件**末尾追加一行**，和 Claude Code 自己的 `/rename` 完全一致：
+
+```json
+{"type":"custom-title","customTitle":"新名字","sessionId":"..."}
+```
+
+- 只 append，不重写、不改已有行，文件仍是合法 JSONL
+- 所以 `claude --resume` 的列表、终端标签都会跟着变
+- 标题优先级：`custom-title`（CLI 或本工具写的）> `ai-title`（自动生成）> 第一条提问
 
 ## HTTP API
 

@@ -348,6 +348,7 @@ function init() {
   window.addEventListener('resize', updateJumpNav);
   $('#copy-resume').addEventListener('click', copyResume);
   $('#open-terminal').addEventListener('click', openInTerminal);
+  $('#d-rename').addEventListener('click', () => openRenameDialog(S.detailId));
   $('#export-md').addEventListener('click', exportMd);
   $('#delete-one').addEventListener('click', () => deleteOne());
   $('#load-more').addEventListener('click', loadMoreTurns);
@@ -608,6 +609,7 @@ function hoverCardHTML(item, data) {
     <div class="hc-actions">
       <button class="btn" type="button" data-hc-open="${esc(item.id)}">打开会话</button>
       <button class="btn ghost" type="button" data-hc-mark="${esc(item.id)}" title="收藏并填写备注">${starred ? '备注' : '收藏'}</button>
+      <button class="btn ghost" type="button" data-hc-rename="${esc(item.id)}" title="重命名（只改显示名）">改名</button>
       <button class="btn danger" type="button" data-hc-del="${esc(item.id)}" ${starred ? 'disabled title="已收藏，取消收藏后才能删除"' : ''}>删除</button>
       <span class="hc-hint">${starred ? '★ 已收藏' : '可撤销'}</span>
     </div>`;
@@ -665,6 +667,12 @@ function onHoverCardClick(e) {
   if (markBtn) {
     hideHoverCard();
     openFavDialog(markBtn.dataset.hcMark);
+    return;
+  }
+  const renameBtn = e.target.closest('[data-hc-rename]');
+  if (renameBtn) {
+    hideHoverCard();
+    openRenameDialog(renameBtn.dataset.hcRename);
     return;
   }
   const delBtn = e.target.closest('[data-hc-del]');
@@ -999,6 +1007,36 @@ async function loadMarks() {
   }
 }
 
+// 重命名：只写本程序的 marks.json，不碰 ~/.claude 里的会话文件
+function openRenameDialog(id) {
+  if (!id) return;
+  const item = (S.detail && S.detail.id === id) ? S.detail : S.items.find((i) => i.id === id);
+  const m = S.marks[id] || {};
+  const dlg = $('#rename-dialog');
+
+  $('#rename-input').value = m.title || '';
+  $('#rename-sub').textContent = '原标题：' + truncate(item?.originalTitle || item?.title || id, 60);
+  dlg.returnValue = 'cancel';
+  dlg.showModal();
+  $('#rename-input').focus();
+  $('#rename-input').select();
+
+  dlg.addEventListener('close', async () => {
+    if (dlg.returnValue !== 'ok') return;
+    const title = $('#rename-input').value.trim();
+    try {
+      await api('/api/marks', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ id, title }] }),
+      });
+      applyMark(id, { title });
+      toast(title ? `已重命名为「${truncate(title, 24)}」` : '已恢复原标题');
+    } catch (err) {
+      toast('保存失败: ' + err.message, true);
+    }
+  }, { once: true });
+}
+
 async function setStarred(id, starred, note) {
   try {
     const res = await api('/api/marks', {
@@ -1018,7 +1056,7 @@ async function setStarred(id, starred, note) {
 function applyMark(id, patch) {
   const existing = S.marks[id] || {};
   const merged = { ...existing, ...patch };
-  const clean = !merged.starred && !(merged.tags || []).length && !merged.note;
+  const clean = !merged.starred && !(merged.tags || []).length && !merged.note && !merged.title;
   if (clean) delete S.marks[id];
   else S.marks[id] = merged;
 
@@ -1027,12 +1065,16 @@ function applyMark(id, patch) {
     it.starred = !!merged.starred;
     it.tags = merged.tags || [];
     it.note = merged.note || '';
+    if (it.originalTitle === undefined) it.originalTitle = it.title;
+    it.title = merged.title || it.originalTitle || it.title;
   }
   if (S.detail && S.detail.id === id) {
     S.detail.starred = !!merged.starred;
     S.detail.tags = merged.tags || [];
     S.detail.note = merged.note || '';
-    renderDetail();
+    if (S.detail.originalTitle === undefined) S.detail.originalTitle = S.detail.title;
+    S.detail.title = merged.title || S.detail.originalTitle || S.detail.title;
+    $('#d-title').textContent = S.detail.title || '(无标题会话)';
   }
   renderList();
   renderProjects();

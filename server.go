@@ -220,7 +220,12 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 	if d.Turns == nil {
 		d.Turns = []Turn{}
 	}
-	fillMark(&d.Starred, &d.Tags, &d.Note, s.marks.Get(id))
+	m := s.marks.Get(id)
+	fillMark(&d.Starred, &d.Tags, &d.Note, m)
+	if m.Title != "" {
+		d.OriginalTitle = d.Title
+		d.Title = m.Title
+	}
 	writeJSON(w, 200, d)
 }
 
@@ -406,6 +411,7 @@ type markUpdate struct {
 	Starred *bool     `json:"starred,omitempty"`
 	Tags    *[]string `json:"tags,omitempty"`
 	Note    *string   `json:"note,omitempty"`
+	Title   *string   `json:"title,omitempty"`
 }
 
 func (s *Server) handleUpdateMarks(w http.ResponseWriter, r *http.Request) {
@@ -433,7 +439,7 @@ func (s *Server) handleUpdateMarks(w http.ResponseWriter, r *http.Request) {
 		if u.ID == "" {
 			continue
 		}
-		m, err := s.marks.Set(u.ID, u.Starred, u.Tags, u.Note)
+		m, err := s.marks.Set(u.ID, u.Starred, u.Tags, u.Note, u.Title)
 		if err != nil {
 			writeErr(w, 500, "保存标记失败: "+err.Error())
 			return

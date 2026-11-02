@@ -79,7 +79,13 @@
             <input id="conv-search" type="search" placeholder="在会话内搜索…" autocomplete="off" spellcheck="false">
             <span class="conv-search-count" id="conv-search-count"></span>
           </div>
-          <button class="icon-btn star-btn" id="d-star" title="收藏 / 备注">☆</button>
+          <button class="icon-btn" id="d-rename" type="button" title="重命名（只改显示名，不动会话文件）">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M13.5 6.5l3 3" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        </svg>
+      </button>
+      <button class="icon-btn star-btn" id="d-star" title="收藏 / 备注">☆</button>
           <button class="btn ghost" id="turns-toggle" title="展开所有轮次">⊞ 展开全部</button>
           <button class="icon-btn" id="open-terminal" type="button" title="在系统终端中打开（claude --resume）">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -135,6 +141,21 @@
   服务已更新，当前页面是旧版本 <button class="btn" id="stale-reload">刷新</button>
 </div>
 <div id="toast" class="toast" hidden></div>
+<dialog id="rename-dialog">
+  <form method="dialog">
+    <h2>重命名会话</h2>
+    <p class="fav-sub" id="rename-sub"></p>
+    <label class="field">
+      <span>显示名<em>留空则恢复原标题</em></span>
+      <input id="rename-input" type="text" maxlength="120" placeholder="给这个会话起个短名字" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="dialog-actions">
+      <button class="btn ghost" type="submit" value="cancel">取消</button>
+      <button class="btn" type="submit" value="ok" id="rename-ok">保存</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="fav-dialog">
   <form method="dialog">
     <h2 id="fav-title">收藏会话</h2>

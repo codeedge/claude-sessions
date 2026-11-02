@@ -1298,6 +1298,7 @@ function turnHTML(t) {
 
   return `<article class="turn" id="t-${t.index}" data-turn="${t.index}">
     ${promptBlock}
+    ${(t.images || []).length ? `<div class="turn-images">${t.images.map((b) => imgHTML(b.detail, b.imageIndex)).join('')}</div>` : ''}
     ${notes}
     ${body || `<div class="imgblk">${empty}</div>`}
   </article>`;
@@ -1318,6 +1319,19 @@ function renderBlocks(blocks) {
   }
   flush();
   return out.join('');
+}
+
+// 会话里的图片：按需向服务端要，滚动到可见时才加载
+function imgHTML(media, index) {
+  if (index === undefined || index === null || !S.detailId) {
+    return `<div class="imgblk">[图片 ${esc(media || '')}]</div>`;
+  }
+  const qs = new URLSearchParams({ i: String(index) });
+  if (S.agent) qs.set('agent', S.agent);
+  const src = `/api/sessions/${encodeURIComponent(S.detailId)}/image?` + qs.toString();
+  return `<a class="turn-img" href="${src}" target="_blank" rel="noopener">
+    <img loading="lazy" src="${src}" alt="${esc(media || '图片')}">
+  </a>`;
 }
 
 function oneLine(s) {
@@ -1367,7 +1381,7 @@ function blockHTML(b) {
       </details>`;
     }
     case 'image':
-      return `<div class="imgblk">[图片 ${esc(b.detail || '')}]</div>`;
+      return imgHTML(b.detail, b.imageIndex);
     default:
       return '';
   }

@@ -441,6 +441,12 @@ body.no-outline .outline { display: none; }
   100% { background: transparent; }
 }
 
+/* 会话里的图片 */
+.turn-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.turn-img { display: block; line-height: 0; border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; }
+.turn-img img { max-width: 100%; max-height: 420px; display: block; }
+.turn-img:hover { border-color: var(--accent); }
+
 /* 未加载轮次之间的占位块 */
 .turn-gap {
   display: flex; align-items: center; justify-content: center; gap: 12px;

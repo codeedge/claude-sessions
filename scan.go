@@ -176,9 +176,12 @@ func decodeContent(raw json.RawMessage, wantBlocks bool) contentInfo {
 			if b.Source != nil && b.Source.MediaType != "" {
 				mt = b.Source.MediaType
 			}
-			appendText(&text, "["+mt+"]")
+			// 详情页会把图片真渲染出来，就不再往正文里塞占位文字；
+			// 建索引时（wantBlocks=false）仍保留，方便按类型搜到
 			if wantBlocks {
 				ci.Blocks = append(ci.Blocks, Block{Kind: "image", Detail: mt})
+			} else {
+				appendText(&text, "["+mt+"]")
 			}
 		}
 	}
@@ -549,6 +552,7 @@ func parseTurns(path string) ([]Turn, error) {
 	turns := make([]Turn, 0, 32)
 	cur := -1
 	seen := make(map[string]bool, 256)
+	imgSeq := 0
 
 	err := eachRecord(path, func(line []byte) {
 		var rec rawRecord
@@ -597,10 +601,20 @@ func parseTurns(path string) ([]Turn, error) {
 			if looksLikeSystemText(ci.Text) {
 				return
 			}
+			var imgs []Block
+			for _, b := range ci.Blocks {
+				if b.Kind != "image" {
+					continue
+				}
+				b.ImageIndex = imgSeq
+				imgSeq++
+				imgs = append(imgs, b)
+			}
 			turns = append(turns, Turn{
 				Index:  len(turns) + 1,
 				Prompt: clip(ci.Text, maxBlockText),
 				TS:     ts,
+				Images: imgs,
 			})
 			cur = len(turns) - 1
 			return

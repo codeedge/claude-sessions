@@ -50,6 +50,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/sessions/{id}/preview", s.handlePreview)
 	s.mux.HandleFunc("GET /api/sessions/{id}/export", s.handleExport)
 	s.mux.HandleFunc("GET /api/sessions/{id}/raw", s.handleRaw)
+	s.mux.HandleFunc("GET /api/sessions/{id}/image", s.handleImage)
 	s.mux.HandleFunc("POST /api/rescan", s.handleRescan)
 	s.mux.HandleFunc("GET /api/marks", s.handleMarks)
 	s.mux.HandleFunc("POST /api/marks", s.handleUpdateMarks)
@@ -60,6 +61,39 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/trash/purge", s.handlePurge)
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
 	s.mux.HandleFunc("POST /api/rename", s.handleRename)
+}
+
+// handleImage 按需返回会话里内嵌的图片（base64 解码后直接吐二进制）
+func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	agent := r.URL.Query().Get("agent")
+	idx, err := strconv.Atoi(r.URL.Query().Get("i"))
+	if err != nil || idx < 0 {
+		writeErr(w, 400, "图片序号不合法")
+		return
+	}
+	info, ok := s.ix.Get(id)
+	if !ok {
+		writeErr(w, 404, "会话不存在")
+		return
+	}
+	path := info.Path
+	if agent != "" {
+		p, _, ok := s.ix.SubagentPath(id, agent)
+		if !ok {
+			writeErr(w, 404, "子代理不存在")
+			return
+		}
+		path = p
+	}
+	img, err := extractImage(path, idx)
+	if err != nil {
+		writeErr(w, 404, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", img.MediaType)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Write(img.Data)
 }
 
 // handleRename 把新名字写进会话文件，和 Claude Code 的 /rename 完全一致：

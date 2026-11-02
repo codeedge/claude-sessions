@@ -16,14 +16,15 @@ type Usage struct {
 // Block is one normalized content block. Kind is one of:
 // text, thinking, tool_use, tool_result, image, other.
 type Block struct {
-	Kind      string          `json:"kind"`
-	Text      string          `json:"text,omitempty"`
-	Name      string          `json:"name,omitempty"`
-	Summary   string          `json:"summary,omitempty"`
-	Detail    string          `json:"detail,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	ToolUseID string          `json:"toolUseId,omitempty"`
-	IsError   bool            `json:"isError,omitempty"`
+	Kind       string          `json:"kind"`
+	Text       string          `json:"text,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Summary    string          `json:"summary,omitempty"`
+	Detail     string          `json:"detail,omitempty"`
+	Input      json.RawMessage `json:"input,omitempty"`
+	ToolUseID  string          `json:"toolUseId,omitempty"`
+	IsError    bool            `json:"isError,omitempty"`
+	ImageIndex int             `json:"imageIndex"` // 会话内第几张图，用于按需取图（0 也要输出）
 }
 
 // Message is a single conversation message.
@@ -41,6 +42,7 @@ type Message struct {
 
 // Turn is one user prompt plus everything the agent did in response.
 type Turn struct {
+	Images   []Block   `json:"images,omitempty"` // 用户粘贴的图片
 	Index    int       `json:"index"`
 	Prompt   string    `json:"prompt"`
 	Command  string    `json:"command,omitempty"`

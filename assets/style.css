@@ -443,10 +443,18 @@ body.no-outline .outline { display: none; }
 
 /* 会话里的图片 */
 .turn-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
-.turn-img { display: block; line-height: 0; padding: 0; cursor: zoom-in;
+.turn-img { position: relative; display: block; line-height: 0; padding: 0; cursor: zoom-in;
   border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; background: none; }
 .turn-img img { max-width: 100%; max-height: 420px; display: block; }
 .turn-img:hover { border-color: var(--accent); }
+.turn-img-no {
+  position: absolute; top: 6px; left: 6px; z-index: 1;
+  padding: 1px 7px; border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.6;
+  color: #fff; background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
 
 /* 图片灯箱：当前页放大，点空白处/Esc 关闭 */
 #img-viewer {
@@ -464,6 +472,13 @@ body.no-outline .outline { display: none; }
   cursor: default;
   background: var(--bg-1);
 }
+#img-viewer-num {
+  position: absolute; top: 18px; left: 22px;
+  padding: 2px 10px; border-radius: 999px;
+  font-family: var(--mono); font-size: 13px;
+  color: #fff; background: rgba(255, 255, 255, .14);
+}
+#img-viewer-num:empty { display: none; }
 body.viewer-open { overflow: hidden; }
 
 /* 未加载轮次之间的占位块 */

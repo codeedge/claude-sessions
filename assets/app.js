@@ -341,7 +341,7 @@ function init() {
   $('#conv').addEventListener('click', onGapClick);
   $('#conv').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-img]');
-    if (btn) { e.preventDefault(); openImageViewer(btn.dataset.img); }
+    if (btn) { e.preventDefault(); openImageViewer(btn.dataset.img, btn.dataset.num); }
   });
   $('#img-viewer').addEventListener('click', (e) => {
     // 只有点在图片本身之外（空白/遮罩）才关闭
@@ -1333,9 +1333,10 @@ function renderBlocks(blocks) {
 }
 
 // 点图在当前页放大，点空白处或 Esc 关掉
-function openImageViewer(src) {
+function openImageViewer(src, num) {
   const box = $('#img-viewer');
   $('#img-viewer-img').src = src;
+  $('#img-viewer-num').textContent = num ? '#' + num : '';
   box.hidden = false;
   document.body.classList.add('viewer-open');
 }
@@ -1356,7 +1357,9 @@ function imgHTML(media, index) {
   const qs = new URLSearchParams({ i: String(index) });
   if (S.agent) qs.set('agent', S.agent);
   const src = `/api/sessions/${encodeURIComponent(S.detailId)}/image?` + qs.toString();
-  return `<button class="turn-img" type="button" data-img="${esc(src)}" title="点击放大">
+  const n = index + 1;
+  return `<button class="turn-img" type="button" data-img="${esc(src)}" data-num="${n}" title="第 ${n} 张 · 点击放大">
+    <span class="turn-img-no">#${n}</span>
     <img loading="lazy" src="${src}" alt="${esc(media || '图片')}">
   </button>`;
 }

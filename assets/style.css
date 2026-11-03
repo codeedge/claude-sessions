@@ -469,7 +469,7 @@ body.no-outline .outline { display: none; }
   max-width: 92vw; max-height: 92vh;
   border-radius: 10px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
-  cursor: default;
+  cursor: zoom-out;
   background: var(--bg-1);
 }
 #img-viewer-num {

@@ -343,10 +343,8 @@ function init() {
     const btn = e.target.closest('[data-img]');
     if (btn) { e.preventDefault(); openImageViewer(btn.dataset.img, btn.dataset.num); }
   });
-  $('#img-viewer').addEventListener('click', (e) => {
-    // 只有点在图片本身之外（空白/遮罩）才关闭
-    if (e.target.id !== 'img-viewer-img') closeImageViewer();
-  });
+  // 点灯箱里任何位置（图片本身或空白）都关闭
+  $('#img-viewer').addEventListener('click', () => closeImageViewer());
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeImageViewer();
   });

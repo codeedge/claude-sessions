@@ -270,6 +270,9 @@ const S = {
   from: 0,
   count: 25,
   pageSize: 25,
+  liveTimer: null,
+  liveRev: 0,
+  liveSlow: 0, // 连续刷新太慢就自动退避
   totalTurns: 0,
   convQuery: '',
   convHits: [],
@@ -1185,6 +1188,7 @@ async function openDetail(id, agent = null, turn = 0) {
       S.turns.sort((a, b) => a.index - b.index);
     }
     renderDetail();
+    startLiveWatch(id);
     if (turn) await jumpToTurn(turn, false);
   } catch (err) {
     $('#conv').innerHTML = `<div class="empty"><h3>无法打开会话</h3><div>${esc(err.message)}</div></div>`;
@@ -1193,6 +1197,7 @@ async function openDetail(id, agent = null, turn = 0) {
 
 function closeDetail() {
   if (document.body.dataset.view !== 'detail') return;
+  stopLiveWatch();
   S.detailId = null;
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -1242,6 +1247,88 @@ function renderDetail() {
 
   renderTurns();
   renderOutline();
+}
+
+// ---------- 运行中的会话：静默增量刷新 ----------
+// 只轮询 /revision（几十微秒），文件变了才重新取最后一段并局部替换 DOM
+const LIVE_INTERVAL = 2500;
+
+function stopLiveWatch() {
+  if (S.liveTimer) {
+    clearTimeout(S.liveTimer);
+    S.liveTimer = null;
+  }
+}
+
+function startLiveWatch(id) {
+  stopLiveWatch();
+  S.liveRev = 0;
+  S.liveSlow = 0;
+  const tick = async () => {
+    if (document.body.dataset.view !== 'detail' || S.detailId !== id) return stopLiveWatch();
+    // 页面在后台时不轮询，回来时立刻补一次
+    if (document.hidden) {
+      S.liveTimer = setTimeout(tick, LIVE_INTERVAL);
+      return;
+    }
+    try {
+      const rev = await api(`/api/sessions/${encodeURIComponent(id)}/revision`);
+      const key = rev.mtime + ':' + rev.size;
+      if (!S.liveRev) {
+        S.liveRev = key;
+      } else if (key !== S.liveRev) {
+        S.liveRev = key;
+        const t0 = performance.now();
+        await refreshTail();
+        const cost = performance.now() - t0;
+        S.liveSlow = cost > 400 ? Math.min(S.liveSlow + 1, 3) : 0;
+      }
+    } catch {
+      /* 轮询失败不打扰用户 */
+    }
+    S.liveTimer = setTimeout(tick, LIVE_INTERVAL * (1 + S.liveSlow * 2));
+  };
+  S.liveTimer = setTimeout(tick, LIVE_INTERVAL);
+}
+
+// 只重取「最后一轮 + 之后新增的」，避免整页重渲染导致滚动跳动
+async function refreshTail() {
+  if (!S.detailId || !S.turns.length) return;
+  const from = Math.max(0, S.turns.length - 1);
+  const qs = new URLSearchParams({ from: String(from), count: String(Math.max(S.pageSize || 50, 50)) });
+  if (S.agent) qs.set('agent', S.agent);
+  const d = await api(`/api/sessions/${encodeURIComponent(S.detailId)}?` + qs.toString());
+  const fresh = d.turns || [];
+  if (!fresh.length) return;
+
+  const main = $('#main');
+  const atBottom = main.scrollHeight - main.clientHeight - main.scrollTop < 80;
+  const keep = main.scrollTop;
+  const lastIdx = S.turns[S.turns.length - 1].index;
+  const replaced = new Map(fresh.map((t) => [t.index, t]));
+
+  if (replaced.has(lastIdx)) {
+    const oldEl = document.getElementById('t-' + lastIdx);
+    const idx = S.turns.findIndex((t) => t.index === lastIdx);
+    S.turns[idx] = replaced.get(lastIdx);
+    if (oldEl) oldEl.outerHTML = turnHTML(replaced.get(lastIdx));
+    replaced.delete(lastIdx);
+  }
+
+  const appended = [...replaced.values()].filter((t) => t.index > lastIdx).sort((a, b) => a.index - b.index);
+  if (appended.length) {
+    for (const t of appended) S.turns.push(t);
+    $('#conv').insertAdjacentHTML('beforeend', appended.map((t) => turnHTML(t)).join(''));
+    $('#outline-list').insertAdjacentHTML('beforeend', appended.map((t) => `<button class="outline-item" data-jump="${t.index}" title="${esc(truncate(turnLabel(t), 120))}">
+      <span class="n">${t.index}</span><span class="p">${esc(truncate(turnLabel(t), 34))}</span></button>`).join(''));
+  }
+
+  if (d.totalTurns) S.totalTurns = d.totalTurns;
+  S.from = S.turns.length;
+  if (atBottom) main.scrollTop = main.scrollHeight;
+  else main.scrollTop = keep;
+  syncDetailToggle();
+  updateJumpNav();
 }
 
 function renderTurns() {

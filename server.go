@@ -51,6 +51,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/sessions/{id}/export", s.handleExport)
 	s.mux.HandleFunc("GET /api/sessions/{id}/raw", s.handleRaw)
 	s.mux.HandleFunc("GET /api/sessions/{id}/image", s.handleImage)
+	s.mux.HandleFunc("GET /api/sessions/{id}/revision", s.handleRevision)
 	s.mux.HandleFunc("POST /api/rescan", s.handleRescan)
 	s.mux.HandleFunc("GET /api/marks", s.handleMarks)
 	s.mux.HandleFunc("POST /api/marks", s.handleUpdateMarks)
@@ -61,6 +62,26 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/trash/purge", s.handlePurge)
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
 	s.mux.HandleFunc("POST /api/rename", s.handleRename)
+}
+
+// handleRevision 只回文件大小和修改时间，用于前端轮询判断"有没有新内容"。
+// 不解析会话，单个请求几十微秒。
+func (s *Server) handleRevision(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	info, ok := s.ix.Get(id)
+	if !ok {
+		writeErr(w, 404, "会话不存在")
+		return
+	}
+	fi, err := os.Stat(info.Path)
+	if err != nil {
+		writeErr(w, 404, "会话文件不存在")
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"size":  fi.Size(),
+		"mtime": fi.ModTime().UnixNano(),
+	})
 }
 
 // handleImage 按需返回会话里内嵌的图片（base64 解码后直接吐二进制）

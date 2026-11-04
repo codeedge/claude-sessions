@@ -1319,7 +1319,7 @@ async function refreshTail() {
   if (appended.length) {
     for (const t of appended) S.turns.push(t);
     $('#conv').insertAdjacentHTML('beforeend', appended.map((t) => turnHTML(t)).join(''));
-    $('#outline-list').insertAdjacentHTML('beforeend', appended.map((t) => `<button class="outline-item" data-jump="${t.index}" title="${esc(truncate(turnLabel(t), 120))}">
+    $('#outline-list').insertAdjacentHTML('beforeend', appended.map((t) => `<button class="outline-item" data-jump="${t.index}" title="${esc(truncate(turnLabel(t), 120))}${t.ts ? "  ·  " + esc(turnTime(t.ts)) : ""}">
       <span class="n">${t.index}</span><span class="p">${esc(truncate(turnLabel(t), 34))}</span></button>`).join(''));
   }
 
@@ -1374,13 +1374,37 @@ function turnLabel(t) {
 
 // 线性阅读流：一轮就是一屏内容，不再套卡片、不再整轮折叠。
 // 只有「思考」和「工具调用」压成一行摘要，点开才看细节。
+// 提问时间：当天只显示时分，同年显示月-日 时:分，跨年带年份
+function turnTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p2 = (n) => String(n).padStart(2, '0');
+  const hm = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return hm;
+  const md = `${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${hm}`;
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}-${md}`;
+}
+
+// 从技能正文里拿技能名（技能后来被删了，这里仍然能显示）
+function skillName(note) {
+  const m = /Base directory for this skill:\s*(\S+)/.exec(note || '');
+  if (!m) return '';
+  const seg = m[1].replace(/\/+$/, '').split('/').pop();
+  return seg || '';
+}
+
 function turnHTML(t) {
+  const ts = turnTime(t.ts);
+  const tsChip = ts ? `<span class="prompt-ts" title="${esc(abs(t.ts))}">${esc(ts)}</span>` : '';
   const promptBlock = t.command
-    ? `<div class="prompt-box cmd"><span class="lbl">命令参数</span>${esc(t.prompt || '（无参数）')}</div>`
-    : (t.prompt ? `<div class="prompt-box"><span class="lbl">用户</span>${esc(t.prompt)}</div>` : '');
+    ? `<div class="prompt-box cmd"><span class="lbl">命令参数</span>${esc(t.prompt || '（无参数）')}${tsChip}</div>`
+    : (t.prompt ? `<div class="prompt-box"><span class="lbl">用户</span>${esc(t.prompt)}${tsChip}</div>` : '');
   const notes = (t.notes || []).map((n) => {
-    const label = n.includes('Base directory for this skill:') ? '技能内容' : '系统上下文';
-    return `<details class="think note"><summary>${label} · ${Array.from(n).length} 字</summary><div>${esc(n)}</div></details>`;
+    const skill = skillName(n);
+    const label = skill ? `技能内容 · ${skill}` : (n.includes('Base directory for this skill:') ? '技能内容' : '系统上下文');
+    return `<details class="think note"><summary>${esc(label)} · ${Array.from(n).length} 字</summary><div>${esc(n)}</div></details>`;
   }).join('');
   const empty = t.command ? '（该命令没有产生回复）' : '（本轮没有助手回复，可能被中断）';
 
@@ -1626,7 +1650,7 @@ function syncDetailToggle() {
 }
 
 function renderOutline() {
-  const items = S.turns.map((t) => `<button class="outline-item" data-jump="${t.index}" title="${esc(truncate(turnLabel(t), 120))}">
+  const items = S.turns.map((t) => `<button class="outline-item" data-jump="${t.index}" title="${esc(truncate(turnLabel(t), 120))}${t.ts ? "  ·  " + esc(turnTime(t.ts)) : ""}">
     <span class="n">${t.index}</span>
     <span class="p">${esc(truncate(turnLabel(t), 34))}</span>
   </button>`).join('');

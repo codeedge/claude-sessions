@@ -512,6 +512,11 @@ body.viewer-open { overflow: hidden; }
 .activity-body .tool > summary { padding: 2px 0; }
 .activity-body .tool pre { background: var(--bg-1); }
 
+.prompt-ts {
+  float: right; margin-left: 12px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--fg-faint); white-space: nowrap;
+}
 .prompt-box {
   border-left: 2px solid var(--accent);
   padding: 2px 0 2px 12px;

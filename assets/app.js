@@ -626,7 +626,6 @@ function hoverCardHTML(item, data) {
     <div class="hc-body">${body}</div>
     <div class="hc-actions">
       <button class="btn" type="button" data-hc-open="${esc(item.id)}">打开会话</button>
-      <button class="btn ghost" type="button" data-hc-star2="${esc(item.id)}">${starred ? '取消收藏' : '收藏'}</button>
       <button class="btn ghost" type="button" data-hc-note="${esc(item.id)}" title="只写备注，不影响收藏">备注</button>
       <button class="btn danger" type="button" data-hc-del="${esc(item.id)}" ${starred ? 'disabled title="已收藏，取消收藏后才能删除"' : ''}>删除</button>
       <span class="hc-hint">${starred ? '★ 已收藏' : '可撤销'}</span>
@@ -670,12 +669,6 @@ function positionHoverCard(row) {
 }
 
 function onHoverCardClick(e) {
-  const star2 = e.target.closest('[data-hc-star2]');
-  if (star2) {
-    hideHoverCard();
-    toggleStar(star2.dataset.hcStar2);
-    return;
-  }
   const noteBtn = e.target.closest('[data-hc-note]');
   if (noteBtn) {
     hideHoverCard();

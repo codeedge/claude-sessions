@@ -1392,7 +1392,8 @@ function turnHTML(t) {
   const ts = turnTime(t.ts);
   const tsChip = ts ? `<span class="prompt-ts" title="${esc(abs(t.ts))}">${esc(ts)}</span>` : '';
   const promptBlock = t.command
-    ? `<div class="prompt-box cmd"><span class="lbl">命令参数</span>${esc(t.prompt || '（无参数）')}${tsChip}</div>`
+    ? `<div class="prompt-box cmd"><span class="lbl">命令</span><span class="cmd-chip">${esc(t.command)}</span>${tsChip}` +
+      `<div class="cmd-args${t.prompt ? '' : ' dim'}">${esc(t.prompt || '（无参数）')}</div></div>`
     : (t.prompt ? `<div class="prompt-box"><span class="lbl">用户</span>${esc(t.prompt)}${tsChip}</div>` : '');
   const notes = (t.notes || []).map((n) => {
     const skill = skillName(n);

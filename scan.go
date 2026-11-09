@@ -693,7 +693,14 @@ func titleCandidate(s string) string {
 	}
 	if cmd, args, ok := parseSlashCommand(s); ok {
 		if args == "" {
-			return "" // a bare /clear or /model carries no title value
+			// 纯控制类命令当标题没有意义，其余（比如 skills）用命令名当标题，
+			// 否则会话只能显示「(无标题会话)」
+			switch cmd {
+			case "/clear", "/model", "/compact", "/help", "/status", "/cost",
+				"/resume", "/exit", "/quit", "/login", "/logout", "/config", "/doctor":
+				return ""
+			}
+			return cmd
 		}
 		return oneLine(cmd+" "+args, 200)
 	}

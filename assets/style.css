@@ -512,6 +512,8 @@ body.viewer-open { overflow: hidden; }
 .activity-body .tool > summary { padding: 2px 0; }
 .activity-body .tool pre { background: var(--bg-1); }
 
+.cmd-args { margin-top: 4px; }
+.cmd-args.dim { color: var(--fg-faint); }
 .prompt-ts {
   float: right; margin-left: 12px;
   font-family: var(--mono); font-size: 11px;

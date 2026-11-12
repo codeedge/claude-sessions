@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -34,16 +36,60 @@ type Index struct {
 	running   map[string]bool
 	runningAt time.Time
 
-	detailMu sync.Mutex
-	detail   map[string]*detailCache
+	detailMu    sync.Mutex
+	detailBytes int64 // 缓存的估算总字节
+	detailTick  int64
+	detail      map[string]*detailCache
 }
 
 type detailCache struct {
 	mod   int64
 	turns []Turn
+	bytes int64 // 估算占用，用于控制缓存总量
+	at    int64 // 最近使用序号，淘汰最久没用的
 }
 
 const detailCacheSize = 4
+
+// 详情缓存的总预算和单条上限：大会话解析后可能上百 MB，不设上限会把内存吃满
+const (
+	detailCacheBudget   = 96 << 20
+	detailCacheMaxEntry = 48 << 20
+	detailCacheMaxFile  = 24 << 20 // 文件超过 24MB 的会话不进缓存
+)
+
+// scheduleScavenge 在解析完大会话后，过几秒把闲置内存归还给操作系统。
+// 不放在请求路径上，避免拖慢响应；同一时间只排一次。
+var scavengePending atomic.Bool
+
+func scheduleScavenge() {
+	if !scavengePending.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		time.Sleep(3 * time.Second)
+		debug.FreeOSMemory()
+		scavengePending.Store(false)
+	}()
+}
+
+// estimateTurns 粗估一份解析结果占多少内存
+func estimateTurns(turns []Turn) int64 {
+	var n int64
+	for _, t := range turns {
+		n += int64(len(t.Prompt))
+		for _, note := range t.Notes {
+			n += int64(len(note))
+		}
+		for _, m := range t.Messages {
+			for _, b := range m.Blocks {
+				n += int64(len(b.Text) + len(b.Summary) + len(b.Detail) + len(b.Input))
+			}
+		}
+		n += 256 // 结构体本身的固定开销
+	}
+	return n
+}
 
 func NewIndex(home, app string) *Index {
 	return &Index{
@@ -631,7 +677,7 @@ func (ix *Index) Detail(sessionID, agentID string, from, count int) (*SessionDet
 		path, agentType, sub = p, at, true
 	}
 
-	turns, err := ix.turnsCached(sessionID+"/"+agentID, path, info.modTime)
+	turns, err := ix.turnsCached(sessionID+"/"+agentID, path, info.modTime, info.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -654,24 +700,48 @@ func (ix *Index) Detail(sessionID, agentID string, from, count int) (*SessionDet
 	return d, nil
 }
 
-func (ix *Index) turnsCached(key, path string, mod int64) ([]Turn, error) {
+func (ix *Index) turnsCached(key, path string, mod, fileSize int64) ([]Turn, error) {
 	ix.detailMu.Lock()
 	defer ix.detailMu.Unlock()
 
+	ix.detailTick++
 	if c, ok := ix.detail[key]; ok && c.mod == mod {
+		c.at = ix.detailTick
 		return c.turns, nil
 	}
 	turns, err := parseTurns(path)
 	if err != nil {
 		return nil, err
 	}
-	if len(ix.detail) >= detailCacheSize {
-		for k := range ix.detail {
-			delete(ix.detail, k)
-			break
-		}
+	// 大会话（文件本身就很大）解析后非常占内存，不缓存，并安排一次内存回收
+	if fileSize > detailCacheMaxFile {
+		scheduleScavenge()
+		return turns, nil
 	}
-	ix.detail[key] = &detailCache{mod: mod, turns: turns}
+
+	size := estimateTurns(turns)
+	if size <= detailCacheMaxEntry {
+		for {
+			over := len(ix.detail) >= detailCacheSize || ix.detailBytes+size > detailCacheBudget
+			if !over || len(ix.detail) == 0 {
+				break
+			}
+			// 淘汰最久没被访问的那个
+			var oldKey string
+			oldAt := int64(1 << 62)
+			for k, c := range ix.detail {
+				if c.at < oldAt {
+					oldAt, oldKey = c.at, k
+				}
+			}
+			ix.detailBytes -= ix.detail[oldKey].bytes
+			delete(ix.detail, oldKey)
+		}
+		ix.detail[key] = &detailCache{mod: mod, turns: turns, bytes: size, at: ix.detailTick}
+		ix.detailBytes += size
+	} else {
+		scheduleScavenge()
+	}
 	return turns, nil
 }
 
@@ -690,7 +760,7 @@ func (ix *Index) SearchTurns(sessionID, agentID, q string) ([]TurnSearchHit, err
 		}
 		path = p
 	}
-	turns, err := ix.turnsCached(sessionID+"/"+agentID, path, info.modTime)
+	turns, err := ix.turnsCached(sessionID+"/"+agentID, path, info.modTime, info.Size)
 	if err != nil {
 		return nil, err
 	}

@@ -825,7 +825,7 @@ function renderRowsTree() {
     const toggle = kids.length
       ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${kids.length} 个分支会话（fork/branch）">⑂${kids.length}<span class="caret">${open ? '▾' : '▸'}</span></button>`
       : '';
-    let html = rowHTML(it, depth > 0);
+    let html = rowHTML(it, depth > 0, kids.length > 0);
     if (toggle) {
       // 把折叠按钮插到标题行末尾
       html = html.replace(/(<div class="row-title">[\s\S]*?)(<\/div>\s*<div class="row-meta-line">)/, `$1${toggle}$2`);
@@ -869,7 +869,7 @@ function renderList() {
   updateBulkBar();
 }
 
-function rowHTML(it, nested = false) {
+function rowHTML(it, nested = false, hideForked = false) {
   const selected = S.selected.has(it.id);
   const live = it.running ? '<span class="badge live">运行中</span>' : '';
   const snippet = it.snippet
@@ -880,7 +880,7 @@ function rowHTML(it, nested = false) {
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
   const fork = (it.forkOf && !nested)
     ? `<span class="badge fork" title="fork/branch 自：${esc(it.forkOfTitle || it.forkOf)}">⑂ 分支</span>` : '';
-  const forked = (!it.forkOf && it.forkCount)
+  const forked = (!it.forkOf && it.forkCount && !hideForked)
     ? `<span class="badge" title="被 fork/branch 了 ${it.forkCount} 次">⑂${it.forkCount}</span>` : '';
   const starred = !!(it.starred || (S.marks[it.id] && S.marks[it.id].starred));
   const star = `<button class="star-btn${starred ? ' on' : ''}" data-star="${esc(it.id)}" title="${starred ? '已收藏 · 点击编辑备注' : '收藏（可填备注）'}" aria-pressed="${starred}">${starred ? STAR_FILLED : STAR_OUTLINE}</button>`;

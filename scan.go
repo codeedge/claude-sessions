@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -284,6 +285,57 @@ func parseTime(s string) time.Time {
 // once, extracting metadata and the searchable conversation text only.
 // metaAcc accumulates the list-level view of a session. It is fed either the
 // whole file (first sighting) or only the bytes appended since the last scan.
+// fork 认亲：每个会话"第一条用户消息的 uuid"作为锚点。
+// fork 出来的会话会把锚点之前的历史整段复制过来，所以扫描某个文件时
+// 如果撞见别的会话的锚点，说明那个会话是从这个文件分叉出去的。
+var (
+	forkMu     sync.RWMutex
+	forkAnchor map[string][]string // uuid -> 拥有它的会话
+	forkFound  map[string][]string // 子会话 -> 包含它的会话
+)
+
+func resetForkScan(anchors map[string][]string) {
+	forkMu.Lock()
+	forkAnchor = anchors
+	forkFound = make(map[string][]string, 8)
+	forkMu.Unlock()
+}
+
+func noteForkSeen(uuid, self string) {
+	forkMu.RLock()
+	owners, ok := forkAnchor[uuid]
+	forkMu.RUnlock()
+	if !ok {
+		return
+	}
+	forkMu.Lock()
+	for _, o := range owners {
+		if o == self {
+			continue
+		}
+		seen := false
+		for _, x := range forkFound[o] {
+			if x == self {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			forkFound[o] = append(forkFound[o], self)
+		}
+	}
+	forkMu.Unlock()
+}
+
+func takeForkFindings() map[string][]string {
+	forkMu.Lock()
+	defer forkMu.Unlock()
+	out := forkFound
+	forkAnchor = nil
+	forkFound = nil
+	return out
+}
+
 type metaAcc struct {
 	info        *SessionInfo
 	search      strings.Builder
@@ -295,6 +347,7 @@ type metaAcc struct {
 	ctxTokens   int       // 最后一条 assistant 的输入侧 token，约等于当前上下文占用
 	firstUUID   string    // 第一条用户消息的 uuid（fork 出来的会话会继承）
 	fileStart   time.Time // 文件第一条带时间的记录，fork 会复制旧消息，用这个分先后
+	containers  []string  // 本次扫描中撞见的、属于别人的锚点
 	modelKey    string    // cost-state 里的模型名，可能带 [1m] 窗口后缀
 }
 
@@ -306,6 +359,9 @@ func (a *metaAcc) consumeRecord(line []byte) {
 	}
 	if a.fileStart.IsZero() {
 		a.fileStart = parseTime(rec.Timestamp)
+	}
+	if rec.UUID != "" {
+		noteForkSeen(rec.UUID, a.info.ID)
 	}
 	switch rec.Type {
 	case "cost-state":
@@ -413,10 +469,23 @@ func (a *metaAcc) finish(fi os.FileInfo, prev *SessionInfo, offset int64) *Sessi
 		info.FirstPrompt = prev.FirstPrompt
 	}
 
+	if len(a.containers) == 0 {
+		forkMu.RLock()
+		if forkFound != nil {
+			a.containers = forkFound[info.ID]
+		}
+		forkMu.RUnlock()
+	}
+
 	if a.firstUUID != "" {
 		info.firstUserUUID = a.firstUUID
 	} else if prev != nil {
 		info.firstUserUUID = prev.firstUserUUID
+	}
+
+	info.containerIDs = a.containers
+	if prev != nil && len(prev.containerIDs) > 0 {
+		info.containerIDs = append(info.containerIDs, prev.containerIDs...)
 	}
 
 	info.startTime = a.fileStart

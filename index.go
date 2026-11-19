@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,13 +76,68 @@ func scheduleScavenge() {
 }
 
 // linkForks 找出 fork / branch 出来的会话。
-// Claude Code 复制历史时会原样保留消息 uuid，所以"第一条用户消息 uuid 相同"
-// 就能认出同一个祖先；其中创建时间最早的是源头，其余都是分叉。
-func linkForks(sessions map[string]*SessionInfo) {
-	groups := make(map[string][]*SessionInfo, 64)
+//
+// 两条线索：
+//  1. Claude Code fork 时会把历史连 uuid 一起复制 —— 第一条用户消息 uuid 相同的是一家人
+//  2. 压缩后继续（continued from a previous conversation）的会话从中间接上，
+//     首条 uuid 是新生成的 summary，但这段历史在原会话里也能找到，
+//     所以扫描时撞见"别人的锚点"就说明那个会话是从当前文件分叉出去的
+func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev map[string]*SessionInfo) {
+	// 未变化的会话在 out 里直接复用了 prev 的指针，reset 之前先把旧结论抄下来
+	prevFork := make(map[string]string, len(prev))
+	for id, s := range prev {
+		if s.ForkOf != "" {
+			prevFork[id] = s.ForkOf
+		}
+	}
+
 	for _, s := range sessions {
 		s.ForkOf, s.ForkOfTitle, s.ForkCount = "", "", 0
-		if s.firstUserUUID == "" {
+	}
+
+	pick := func(self string, cands []string) *SessionInfo {
+		var best *SessionInfo
+		for _, id := range cands {
+			if id == self {
+				continue
+			}
+			c := sessions[id]
+			if c == nil {
+				continue
+			}
+			if best == nil || c.startTime.Before(best.startTime) {
+				best = c
+			}
+		}
+		return best
+	}
+
+	// 线索 1（强）：这个文件里出现了别的会话的首条消息，说明那个会话是从这里分叉的
+	for childID, parents := range found {
+		child := sessions[childID]
+		if child == nil {
+			continue
+		}
+		if p := pick(childID, parents); p != nil && !child.startTime.IsZero() && !p.startTime.After(child.startTime) {
+			child.ForkOf = p.ID
+			child.ForkOfTitle = p.Title
+		}
+	}
+
+	// 上次的结论先兜底（文件没变就不会重扫，拿不到线索 1）
+	for id, s := range sessions {
+		if s.ForkOf != "" {
+			continue
+		}
+		if p := sessions[prevFork[id]]; p != nil {
+			s.ForkOf, s.ForkOfTitle = p.ID, p.Title
+		}
+	}
+
+	// 线索 2（弱）：首条消息 uuid 相同，最早的当源头
+	groups := make(map[string][]*SessionInfo, 64)
+	for _, s := range sessions {
+		if s.ForkOf != "" || s.firstUserUUID == "" {
 			continue
 		}
 		groups[s.firstUserUUID] = append(groups[s.firstUserUUID], s)
@@ -89,25 +146,53 @@ func linkForks(sessions map[string]*SessionInfo) {
 		if len(g) < 2 {
 			continue
 		}
-		// fork 会把旧消息的时间戳一起复制过来，所以不能按消息时间排；
-		// 用文件自己的起始时间（第一条带时间的记录）判断先后
 		sort.Slice(g, func(i, j int) bool {
-			a, b := g[i].startTime, g[j].startTime
-			if a.IsZero() || b.IsZero() || a.Equal(b) {
-				if g[i].CreatedAt.Equal(g[j].CreatedAt) {
-					return g[i].ID < g[j].ID
-				}
-				return g[i].CreatedAt.Before(g[j].CreatedAt)
+			if g[i].startTime.Equal(g[j].startTime) {
+				return g[i].ID < g[j].ID
 			}
-			return a.Before(b)
+			return g[i].startTime.Before(g[j].startTime)
 		})
 		root := g[0]
 		for _, s := range g[1:] {
 			s.ForkOf = root.ID
 			s.ForkOfTitle = root.Title
-			root.ForkCount++
 		}
 	}
+
+	for _, s := range sessions {
+		if s.ForkOf != "" {
+			if p := sessions[s.ForkOf]; p != nil {
+				p.ForkCount++
+			}
+		}
+	}
+}
+
+// firstUserUUIDOf 只读文件开头，拿第一条用户消息的 uuid
+func firstUserUUIDOf(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	br := bufio.NewReaderSize(f, 64<<10)
+	for i := 0; i < 512; i++ {
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 && bytes.Contains(line, []byte(`"type":"user"`)) {
+			var rec struct {
+				Type   string `json:"type"`
+				UUID   string `json:"uuid"`
+				IsMeta bool   `json:"isMeta"`
+			}
+			if json.Unmarshal(line, &rec) == nil && rec.Type == "user" && rec.UUID != "" && !rec.IsMeta {
+				return rec.UUID
+			}
+		}
+		if err != nil {
+			return ""
+		}
+	}
+	return ""
 }
 
 // estimateTurns 粗估一份解析结果占多少内存
@@ -205,6 +290,26 @@ func (ix *Index) scanLocked() error {
 			paths = append(paths, filepath.Join(dir, f.Name()))
 		}
 	}
+
+	// 先把每个会话的"第一条用户消息 uuid"收集起来，扫描时用来认亲
+	anchors := make(map[string][]string, len(paths))
+	for _, p := range paths {
+		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
+		u := ""
+		if old, ok := prev[id]; ok && old.firstUserUUID != "" {
+			if fi, err := os.Stat(p); err == nil && old.Size == fi.Size() && old.modTime == fi.ModTime().UnixNano() {
+				u = old.firstUserUUID
+			}
+		}
+		if u == "" {
+			u = firstUserUUIDOf(p)
+		}
+		if u != "" {
+			anchors[u] = append(anchors[u], id)
+		}
+	}
+	resetForkScan(anchors)
+	defer takeForkFindings()
 
 	out := make(map[string]*SessionInfo, len(paths))
 	var mu sync.Mutex
@@ -310,7 +415,7 @@ func (ix *Index) scanLocked() error {
 		}
 	}
 
-	linkForks(out)
+	linkForks(out, takeForkFindings(), prev)
 
 	ix.mu.Lock()
 	ix.sessions = out

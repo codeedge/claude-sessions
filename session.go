@@ -100,6 +100,7 @@ type SessionInfo struct {
 	modelKey      string    `json:"-"` // model id from cost-state, carries the window suffix
 	firstUserUUID string    `json:"-"` // 第一条用户消息的 uuid，fork 会原样复制，用它认亲
 	startTime     time.Time `json:"-"` // 文件自身的起始时间，用来判断谁先谁后
+	containerIDs  []string  `json:"-"` // 历史里包含本会话锚点的会话（分叉源头候选）
 	customTitle   string    `json:"-"` // /rename 设置的名字，优先于 ai-title
 	searchText    string    `json:"-"` // ASCII-lowercased conversation text, byte-aligned with source
 }

@@ -341,6 +341,18 @@ function init() {
   $('#stale-reload').addEventListener('click', () => location.reload());
   $('#back').addEventListener('click', closeDetail);
   $('#turns-toggle').addEventListener('click', toggleAllDetails);
+  $('#sessions').addEventListener('click', async (e) => {
+    const el = e.target.closest('[data-copy-id]');
+    if (!el) return;
+    e.stopPropagation();
+    const id = el.dataset.copyId;
+    try {
+      await navigator.clipboard.writeText(id);
+      toast('已复制会话 ID');
+    } catch {
+      toast('复制失败: ' + id, true);
+    }
+  });
   $('#conv').addEventListener('click', onGapClick);
   $('#conv').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-img]');
@@ -823,6 +835,7 @@ function rowHTML(it) {
 
   // 一行统计：创建 · 活跃 · 条数 · token · 体积 · 工具 · 上下文
   const bits = [];
+  bits.push(`<span class="sid" data-copy-id="${esc(it.id)}" title="点击复制会话 ID">${esc(it.id)}</span>`);
   bits.push(`<span title="最后活动 ${esc(abs(it.updatedAt))}">活跃 ${esc(rel(it.updatedAt))}</span>`);
   bits.push(`${it.userMsgs + it.asstMsgs} 条`);
   bits.push(`${fmtNum(it.in + it.out)} tok`);

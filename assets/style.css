@@ -309,6 +309,11 @@ body[data-view="trash"] .sidebar { display: none; }
 }
 .row-title .t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-title .t mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.row-meta-line .sid {
+  font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint);
+  cursor: copy; user-select: all;
+}
+.row-meta-line .sid:hover { color: var(--fg-dim); }
 .row-meta-line .created { color: var(--fg-faint); }
 .row-meta-line .ctx.warn { color: var(--warn); }
 .row-meta-line .ctx.high { color: var(--err); }

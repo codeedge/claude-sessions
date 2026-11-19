@@ -376,6 +376,10 @@ function init() {
   });
   // 点灯箱里任何位置（图片本身或空白）都关闭
   $('#img-viewer').addEventListener('click', () => closeImageViewer());
+  $('#d-branch').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-open-session]');
+    if (btn) openDetail(btn.dataset.openSession);
+  });
   $('#d-meta').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-open-session]');
     if (btn) openDetail(btn.dataset.openSession);
@@ -841,6 +845,17 @@ function renderRowsTree() {
   return roots.map((it) => build(it, 0)).join('');
 }
 
+// 把「父 → 子」关系记下来，详情页横幅要用
+function indexBranchChildren() {
+  const map = new Map();
+  for (const it of S.items) {
+    if (!it.forkOf) continue;
+    if (!map.has(it.forkOf)) map.set(it.forkOf, []);
+    map.get(it.forkOf).push(it);
+  }
+  S.branchChildren = map;
+}
+
 function renderList() {
   const box = $('#sessions');
   const summary = $('#list-summary');
@@ -864,6 +879,7 @@ function renderList() {
       : '<h3>磁盘上没有会话</h3><div>确认 Claude Code 至少用过一次，然后点右上角 ⟳ 重新扫描</div>';
   } else {
     empty.hidden = true;
+    indexBranchChildren();
     box.innerHTML = renderRowsTree();
   }
   updateBulkBar();
@@ -1284,6 +1300,8 @@ function renderDetail() {
   $('#d-title').textContent = title || '(无标题会话)';
   $('#d-sub').textContent = (d.cwd || d.project || '') + (d.branch ? '  ·  ' + d.branch : '');
 
+  renderBranchBanner();
+
   const bits = [
     ['会话 ID', d.subagent ? `${d.id} / ${d.agentType}` : d.id],
     ['模型', d.model || '—'],
@@ -1400,6 +1418,29 @@ async function refreshTail() {
   else main.scrollTop = keep;
   syncDetailToggle();
   updateJumpNav();
+}
+
+// 详情页顶部的分支提示：标明自己是分支，或标明自己有几个分支
+function renderBranchBanner() {
+  const d = S.detail;
+  const box = $('#d-branch');
+  if (!d || !box) return;
+  const kids = S.branchChildren && S.branchChildren.get(d.id);
+  if (d.forkOf) {
+    box.hidden = false;
+    box.innerHTML = `<span class="bb-icon">↳</span>
+      <span class="bb-text">这是一个<b>分支会话</b>，来自</span>
+      <button class="bb-link" type="button" data-open-session="${esc(d.forkOf)}">${esc(truncate(d.forkOfTitle || d.forkOf, 60))}</button>
+      <span class="bb-hint">点标题回到主会话</span>`;
+  } else if (d.forkCount) {
+    const names = (kids || []).map((k) => `<button class="bb-link" type="button" data-open-session="${esc(k.id)}">${esc(truncate(k.title || k.id, 32))}</button>`).join('、');
+    box.hidden = false;
+    box.innerHTML = `<span class="bb-icon">↳</span>
+      <span class="bb-text">主会话，有 <b>${d.forkCount}</b> 个分支：</span>${names}`;
+  } else {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
 }
 
 // 详情页星标跟着收藏状态走（点星标、在别处取消收藏都要同步）

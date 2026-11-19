@@ -348,6 +348,7 @@ type metaAcc struct {
 	firstUUID   string    // 第一条用户消息的 uuid（fork 出来的会话会继承）
 	fileStart   time.Time // 文件第一条带时间的记录，fork 会复制旧消息，用这个分先后
 	containers  []string  // 本次扫描中撞见的、属于别人的锚点
+	parentID    string    // 记录里写明的来源会话
 	modelKey    string    // cost-state 里的模型名，可能带 [1m] 窗口后缀
 }
 
@@ -359,6 +360,17 @@ func (a *metaAcc) consumeRecord(line []byte) {
 	}
 	if a.fileStart.IsZero() {
 		a.fileStart = parseTime(rec.Timestamp)
+	}
+	// /branch、/fork 写的显式来源：{"forkedFrom":{"sessionId":...,"messageUuid":...}}
+	if a.parentID == "" && bytes.Contains(line, []byte(`"forkedFrom"`)) {
+		var fr struct {
+			ForkedFrom struct {
+				SessionID string `json:"sessionId"`
+			} `json:"forkedFrom"`
+		}
+		if json.Unmarshal(line, &fr) == nil && fr.ForkedFrom.SessionID != "" {
+			a.parentID = fr.ForkedFrom.SessionID
+		}
 	}
 	if rec.UUID != "" {
 		noteForkSeen(rec.UUID, a.info.ID)
@@ -481,6 +493,11 @@ func (a *metaAcc) finish(fi os.FileInfo, prev *SessionInfo, offset int64) *Sessi
 		info.firstUserUUID = a.firstUUID
 	} else if prev != nil {
 		info.firstUserUUID = prev.firstUserUUID
+	}
+
+	info.parentID = a.parentID
+	if info.parentID == "" && prev != nil {
+		info.parentID = prev.parentID
 	}
 
 	info.containerIDs = a.containers

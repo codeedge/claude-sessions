@@ -112,6 +112,17 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 		return best
 	}
 
+	// 线索 0（最准）：记录里直接写了 forkedFrom
+	for id, s := range sessions {
+		if s.parentID == "" {
+			continue
+		}
+		if p := sessions[s.parentID]; p != nil && p.ID != id {
+			s.ForkOf = p.ID
+			s.ForkOfTitle = p.Title
+		}
+	}
+
 	// 线索 1（强）：这个文件里出现了别的会话的首条消息，说明那个会话是从这里分叉的
 	for childID, parents := range found {
 		child := sessions[childID]

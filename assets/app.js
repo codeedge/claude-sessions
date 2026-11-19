@@ -348,6 +348,10 @@ function init() {
   });
   // 点灯箱里任何位置（图片本身或空白）都关闭
   $('#img-viewer').addEventListener('click', () => closeImageViewer());
+  $('#d-meta').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-open-session]');
+    if (btn) openDetail(btn.dataset.openSession);
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeImageViewer();
   });
@@ -808,6 +812,10 @@ function rowHTML(it) {
   const branch = it.branch ? `<span class="badge">${esc(it.branch)}</span>` : '';
   const subs = (it.subagents && it.subagents.length)
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
+  const fork = it.forkOf
+    ? `<span class="badge fork" title="fork/branch 自：${esc(it.forkOfTitle || it.forkOf)}">⑂ 分叉</span>` : '';
+  const forked = (!it.forkOf && it.forkCount)
+    ? `<span class="badge" title="被 fork/branch 了 ${it.forkCount} 次">⑂${it.forkCount}</span>` : '';
   const starred = !!(it.starred || (S.marks[it.id] && S.marks[it.id].starred));
   const star = `<button class="star-btn${starred ? ' on' : ''}" data-star="${esc(it.id)}" title="${starred ? '已收藏 · 点击编辑备注' : '收藏（可填备注）'}" aria-pressed="${starred}">${starred ? STAR_FILLED : STAR_OUTLINE}</button>`;
   // 收藏的备注跟在标题后面：标题【备注】
@@ -837,7 +845,7 @@ function rowHTML(it) {
         ${star}
         <span class="t">${hlText(it.title || '(无标题)', S.q)}</span>
         ${note}
-        ${live}${branch}${subs}
+        ${live}${branch}${subs}${fork}${forked}
       </div>
       ${meta}
       <div class="row-path" title="${esc(it.cwd || it.project)}">${esc(it.cwd || it.project || '')}</div>
@@ -1228,7 +1236,13 @@ function renderDetail() {
     subs = d.subagents.map((a) => `<button class="btn ghost subagent-btn" data-agent="${esc(a.id)}" title="${esc(a.description || '')}">↳ ${esc(a.agentType)} · ${a.msgs} 条</button>`).join('');
   }
   const noteChip = d.note ? `<span class="detail-note">✎ ${esc(d.note)}</span>` : '';
-  $('#d-meta').innerHTML = bits.map(([k, v]) => `<span><span class="k">${esc(k)}</span> <b>${esc(v)}</b></span>`).join('') +
+  if (d.forkOf) {
+    bits.unshift(['分叉自', `<button class="link-btn" data-open-session="${esc(d.forkOf)}">${esc(truncate(d.forkOfTitle || d.forkOf, 40))}</button>`]);
+  }
+  if (d.forkCount) {
+    bits.push(['被分叉', String(d.forkCount)]);
+  }
+  $('#d-meta').innerHTML = bits.map(([k, v]) => `<span><span class="k">${esc(k)}</span> <b>${v}</b></span>`).join('') +
     (noteChip ? `<span class="detail-mark">${noteChip}</span>` : '') + subs;
 
   syncDetailStar();

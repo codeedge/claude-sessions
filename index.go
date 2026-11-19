@@ -73,6 +73,43 @@ func scheduleScavenge() {
 	}()
 }
 
+// linkForks 找出 fork / branch 出来的会话。
+// Claude Code 复制历史时会原样保留消息 uuid，所以"第一条用户消息 uuid 相同"
+// 就能认出同一个祖先；其中创建时间最早的是源头，其余都是分叉。
+func linkForks(sessions map[string]*SessionInfo) {
+	groups := make(map[string][]*SessionInfo, 64)
+	for _, s := range sessions {
+		s.ForkOf, s.ForkOfTitle, s.ForkCount = "", "", 0
+		if s.firstUserUUID == "" {
+			continue
+		}
+		groups[s.firstUserUUID] = append(groups[s.firstUserUUID], s)
+	}
+	for _, g := range groups {
+		if len(g) < 2 {
+			continue
+		}
+		// fork 会把旧消息的时间戳一起复制过来，所以不能按消息时间排；
+		// 用文件自己的起始时间（第一条带时间的记录）判断先后
+		sort.Slice(g, func(i, j int) bool {
+			a, b := g[i].startTime, g[j].startTime
+			if a.IsZero() || b.IsZero() || a.Equal(b) {
+				if g[i].CreatedAt.Equal(g[j].CreatedAt) {
+					return g[i].ID < g[j].ID
+				}
+				return g[i].CreatedAt.Before(g[j].CreatedAt)
+			}
+			return a.Before(b)
+		})
+		root := g[0]
+		for _, s := range g[1:] {
+			s.ForkOf = root.ID
+			s.ForkOfTitle = root.Title
+			root.ForkCount++
+		}
+	}
+}
+
 // estimateTurns 粗估一份解析结果占多少内存
 func estimateTurns(turns []Turn) int64 {
 	var n int64
@@ -273,8 +310,8 @@ func (ix *Index) scanLocked() error {
 		}
 	}
 
-	subagentsStart := time.Now()
-	_ = subagentsStart
+	linkForks(out)
+
 	ix.mu.Lock()
 	ix.sessions = out
 	ix.scanned = time.Now()

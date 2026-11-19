@@ -291,9 +291,11 @@ type metaAcc struct {
 	last        time.Time
 	title       string
 	firstPrompt string
-	customTitle string // /rename 设置的会话名，优先于 ai-title
-	ctxTokens   int    // 最后一条 assistant 的输入侧 token，约等于当前上下文占用
-	modelKey    string // cost-state 里的模型名，可能带 [1m] 窗口后缀
+	customTitle string    // /rename 设置的会话名，优先于 ai-title
+	ctxTokens   int       // 最后一条 assistant 的输入侧 token，约等于当前上下文占用
+	firstUUID   string    // 第一条用户消息的 uuid（fork 出来的会话会继承）
+	fileStart   time.Time // 文件第一条带时间的记录，fork 会复制旧消息，用这个分先后
+	modelKey    string    // cost-state 里的模型名，可能带 [1m] 窗口后缀
 }
 
 // consumeRecord folds one jsonl record into the accumulator.
@@ -301,6 +303,9 @@ func (a *metaAcc) consumeRecord(line []byte) {
 	var rec rawRecord
 	if json.Unmarshal(line, &rec) != nil {
 		return
+	}
+	if a.fileStart.IsZero() {
+		a.fileStart = parseTime(rec.Timestamp)
 	}
 	switch rec.Type {
 	case "cost-state":
@@ -325,6 +330,9 @@ func (a *metaAcc) consumeRecord(line []byte) {
 			a.title = rec.AITitle
 		}
 	case "user", "assistant":
+		if rec.Type == "user" && a.firstUUID == "" && rec.UUID != "" && !rec.IsMeta {
+			a.firstUUID = rec.UUID
+		}
 		if ts := parseTime(rec.Timestamp); !ts.IsZero() {
 			if a.first.IsZero() || ts.Before(a.first) {
 				a.first = ts
@@ -403,6 +411,17 @@ func (a *metaAcc) finish(fi os.FileInfo, prev *SessionInfo, offset int64) *Sessi
 		info.FirstPrompt = a.firstPrompt
 	} else if prev != nil {
 		info.FirstPrompt = prev.FirstPrompt
+	}
+
+	if a.firstUUID != "" {
+		info.firstUserUUID = a.firstUUID
+	} else if prev != nil {
+		info.firstUserUUID = prev.firstUserUUID
+	}
+
+	info.startTime = a.fileStart
+	if info.startTime.IsZero() && prev != nil {
+		info.startTime = prev.startTime
 	}
 
 	info.customTitle = a.customTitle

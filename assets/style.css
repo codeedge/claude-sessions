@@ -346,6 +346,9 @@ body[data-view="trash"] .sidebar { display: none; }
   border: 1px solid var(--line); color: var(--fg-dim);
   background: var(--bg-2); line-height: 1.6;
 }
+.badge.fork { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline dotted; }
+.link-btn:hover { text-decoration: underline; }
 .badge.live { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
 .badge.live::before {
   content: ""; width: 6px; height: 6px; border-radius: 50%;

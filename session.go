@@ -88,15 +88,20 @@ type SessionInfo struct {
 	ContextLimit  int           `json:"contextLimit,omitempty"`
 	Running       bool          `json:"running"`
 	Subagents     []SubagentRef `json:"subagents,omitempty"`
+	ForkOf        string        `json:"forkOf,omitempty"`      // 从哪个会话 fork/branch 出来
+	ForkOfTitle   string        `json:"forkOfTitle,omitempty"` // 来源会话的标题
+	ForkCount     int           `json:"forkCount,omitempty"`   // 这个会话被 fork 了几次
 
 	// internal
-	Path          string `json:"-"`
-	modTime       int64  `json:"-"` // unix nano, used for incremental rescans
-	parsedOffset  int64  `json:"-"` // bytes already folded into this entry
-	subagentStamp int64  `json:"-"` // subagents dir mtime when last scanned
-	modelKey      string `json:"-"` // model id from cost-state, carries the window suffix
-	customTitle   string `json:"-"` // /rename 设置的名字，优先于 ai-title
-	searchText    string `json:"-"` // ASCII-lowercased conversation text, byte-aligned with source
+	Path          string    `json:"-"`
+	modTime       int64     `json:"-"` // unix nano, used for incremental rescans
+	parsedOffset  int64     `json:"-"` // bytes already folded into this entry
+	subagentStamp int64     `json:"-"` // subagents dir mtime when last scanned
+	modelKey      string    `json:"-"` // model id from cost-state, carries the window suffix
+	firstUserUUID string    `json:"-"` // 第一条用户消息的 uuid，fork 会原样复制，用它认亲
+	startTime     time.Time `json:"-"` // 文件自身的起始时间，用来判断谁先谁后
+	customTitle   string    `json:"-"` // /rename 设置的名字，优先于 ai-title
+	searchText    string    `json:"-"` // ASCII-lowercased conversation text, byte-aligned with source
 }
 
 // Hit is a search result: a session plus a snippet of the matching region.

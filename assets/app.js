@@ -823,7 +823,7 @@ function renderRowsTree() {
     const kids = children.get(it.id) || [];
     const open = depth > 0 || expandedAll || S.forkOpen.has(it.id);
     const toggle = kids.length
-      ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${kids.length} 个分叉会话">⑂${kids.length}<span class="caret">${open ? '▾' : '▸'}</span></button>`
+      ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${kids.length} 个分支会话（fork/branch）">⑂${kids.length}<span class="caret">${open ? '▾' : '▸'}</span></button>`
       : '';
     let html = rowHTML(it, depth > 0);
     if (toggle) {
@@ -879,7 +879,7 @@ function rowHTML(it, nested = false) {
   const subs = (it.subagents && it.subagents.length)
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
   const fork = (it.forkOf && !nested)
-    ? `<span class="badge fork" title="fork/branch 自：${esc(it.forkOfTitle || it.forkOf)}">⑂ 分叉</span>` : '';
+    ? `<span class="badge fork" title="fork/branch 自：${esc(it.forkOfTitle || it.forkOf)}">⑂ 分支</span>` : '';
   const forked = (!it.forkOf && it.forkCount)
     ? `<span class="badge" title="被 fork/branch 了 ${it.forkCount} 次">⑂${it.forkCount}</span>` : '';
   const starred = !!(it.starred || (S.marks[it.id] && S.marks[it.id].starred));
@@ -1306,10 +1306,10 @@ function renderDetail() {
   }
   const noteChip = d.note ? `<span class="detail-note">✎ ${esc(d.note)}</span>` : '';
   if (d.forkOf) {
-    bits.unshift(['分叉自', `<button class="link-btn" data-open-session="${esc(d.forkOf)}">${esc(truncate(d.forkOfTitle || d.forkOf, 40))}</button>`]);
+    bits.unshift(['分支自', `<button class="link-btn" data-open-session="${esc(d.forkOf)}">${esc(truncate(d.forkOfTitle || d.forkOf, 40))}</button>`]);
   }
   if (d.forkCount) {
-    bits.push(['被分叉', String(d.forkCount)]);
+    bits.push(['被分支', String(d.forkCount)]);
   }
   $('#d-meta').innerHTML = bits.map(([k, v]) => `<span><span class="k">${esc(k)}</span> <b>${v}</b></span>`).join('') +
     (noteChip ? `<span class="detail-mark">${noteChip}</span>` : '') + subs;

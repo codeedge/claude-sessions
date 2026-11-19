@@ -270,6 +270,7 @@ const S = {
   from: 0,
   count: 25,
   pageSize: 25,
+  forkOpen: new Set(JSON.parse(localStorage.getItem('forkOpen') || '[]')), // 展开了分支的父会话
   liveTimer: null,
   liveRev: 0,
   liveSlow: 0, // 连续刷新太慢就自动退避
@@ -341,6 +342,21 @@ function init() {
   $('#stale-reload').addEventListener('click', () => location.reload());
   $('#back').addEventListener('click', closeDetail);
   $('#turns-toggle').addEventListener('click', toggleAllDetails);
+  $('#sessions').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-toggle-forks]');
+    if (!btn) return;
+    e.stopPropagation();
+    const id = btn.dataset.toggleForks;
+    const box = document.querySelector(`[data-fork-of="${CSS.escape(id)}"]`);
+    const willOpen = !(box && !box.hidden);
+    if (willOpen) S.forkOpen.add(id); else S.forkOpen.delete(id);
+    try { localStorage.setItem('forkOpen', JSON.stringify([...S.forkOpen])); } catch {}
+    if (box) box.hidden = !willOpen;
+    btn.classList.toggle('open', willOpen);
+    const caret = btn.querySelector('.caret');
+    if (caret) caret.textContent = willOpen ? '▾' : '▸';
+  });
+
   $('#sessions').addEventListener('click', async (e) => {
     const el = e.target.closest('[data-copy-id]');
     if (!el) return;
@@ -787,6 +803,44 @@ async function loadSessions(opts = {}) {
   }
 }
 
+// 分叉出来的会话挂在父会话下面，二级列表、可折叠
+function renderRowsTree() {
+  const byId = new Map(S.items.map((i) => [i.id, i]));
+  const children = new Map();
+  for (const it of S.items) {
+    if (it.forkOf && byId.has(it.forkOf)) {
+      if (!children.has(it.forkOf)) children.set(it.forkOf, []);
+      children.get(it.forkOf).push(it);
+    }
+  }
+  // 搜索时全部展开，否则命中的子会话会被藏起来
+  const expandedAll = !!S.q;
+
+  const seen = new Set();
+  const build = (it, depth) => {
+    if (seen.has(it.id)) return '';
+    seen.add(it.id);
+    const kids = children.get(it.id) || [];
+    const open = depth > 0 || expandedAll || S.forkOpen.has(it.id);
+    const toggle = kids.length
+      ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${kids.length} 个分叉会话">⑂${kids.length}<span class="caret">${open ? '▾' : '▸'}</span></button>`
+      : '';
+    let html = rowHTML(it, depth > 0);
+    if (toggle) {
+      // 把折叠按钮插到标题行末尾
+      html = html.replace(/(<div class="row-title">[\s\S]*?)(<\/div>\s*<div class="row-meta-line">)/, `$1${toggle}$2`);
+    }
+    if (kids.length) {
+      html += `<div class="fork-children" data-fork-of="${esc(it.id)}"${open ? '' : ' hidden'}>` +
+        kids.map((k) => build(k, depth + 1)).join('') + '</div>';
+    }
+    return html;
+  };
+
+  const roots = S.items.filter((it) => !it.forkOf || !byId.has(it.forkOf));
+  return roots.map((it) => build(it, 0)).join('');
+}
+
 function renderList() {
   const box = $('#sessions');
   const summary = $('#list-summary');
@@ -810,12 +864,12 @@ function renderList() {
       : '<h3>磁盘上没有会话</h3><div>确认 Claude Code 至少用过一次，然后点右上角 ⟳ 重新扫描</div>';
   } else {
     empty.hidden = true;
-    box.innerHTML = S.items.map(rowHTML).join('');
+    box.innerHTML = renderRowsTree();
   }
   updateBulkBar();
 }
 
-function rowHTML(it) {
+function rowHTML(it, nested = false) {
   const selected = S.selected.has(it.id);
   const live = it.running ? '<span class="badge live">运行中</span>' : '';
   const snippet = it.snippet
@@ -824,7 +878,7 @@ function rowHTML(it) {
   const branch = it.branch ? `<span class="badge">${esc(it.branch)}</span>` : '';
   const subs = (it.subagents && it.subagents.length)
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
-  const fork = it.forkOf
+  const fork = (it.forkOf && !nested)
     ? `<span class="badge fork" title="fork/branch 自：${esc(it.forkOfTitle || it.forkOf)}">⑂ 分叉</span>` : '';
   const forked = (!it.forkOf && it.forkCount)
     ? `<span class="badge" title="被 fork/branch 了 ${it.forkCount} 次">⑂${it.forkCount}</span>` : '';
@@ -905,6 +959,8 @@ function onRowPointerOver(e) {
 
 function onListClick(e) {
   if (e.target.closest('input[type=checkbox]')) return;
+  // 折叠按钮、会话 ID 复制：不要顺带打开详情
+  if (e.target.closest('[data-toggle-forks]') || e.target.closest('[data-copy-id]')) return;
 
   const starBtn = e.target.closest('[data-star]');
   if (starBtn) {

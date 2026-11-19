@@ -347,10 +347,27 @@ body[data-view="trash"] .sidebar { display: none; }
 
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
+  flex: none; white-space: nowrap;
   font-size: 10.5px; padding: 1px 6px; border-radius: 20px;
   border: 1px solid var(--line); color: var(--fg-dim);
   background: var(--bg-2); line-height: 1.6;
 }
+.fork-toggle {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-left: 2px; padding: 0 6px;
+  font-size: 11px; font-family: var(--mono);
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px; cursor: pointer;
+}
+.fork-toggle:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.fork-toggle .caret { font-size: 9px; opacity: .8; }
+.fork-children {
+  margin-left: 34px;
+  border-left: 2px solid var(--line-soft);
+  padding-left: 10px;
+}
+.fork-children .row { background: color-mix(in srgb, var(--bg-1) 55%, transparent); }
 .badge.fork { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .warn-text { color: #f0b429; font-size: 12.5px; }
 .link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline dotted; }

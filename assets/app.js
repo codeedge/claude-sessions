@@ -1101,6 +1101,7 @@ function applyMark(id, patch) {
     S.detail.starred = !!merged.starred;
     S.detail.tags = merged.tags || [];
     S.detail.note = merged.note || '';
+    syncDetailStar();
   }
   renderList();
   renderProjects();
@@ -1230,13 +1231,7 @@ function renderDetail() {
   $('#d-meta').innerHTML = bits.map(([k, v]) => `<span><span class="k">${esc(k)}</span> <b>${esc(v)}</b></span>`).join('') +
     (noteChip ? `<span class="detail-mark">${noteChip}</span>` : '') + subs;
 
-  const starBtn = $('#d-star');
-  if (starBtn) {
-    const starred = !!(d.starred || (S.marks[d.id] && S.marks[d.id].starred));
-    starBtn.innerHTML = starred ? STAR_FILLED : STAR_OUTLINE;
-    starBtn.classList.toggle('on', starred);
-    starBtn.title = starred ? '已收藏 · 编辑备注' : '收藏（可填备注）';
-  }
+  syncDetailStar();
 
   renderTurns();
   renderOutline();
@@ -1322,6 +1317,18 @@ async function refreshTail() {
   else main.scrollTop = keep;
   syncDetailToggle();
   updateJumpNav();
+}
+
+// 详情页星标跟着收藏状态走（点星标、在别处取消收藏都要同步）
+function syncDetailStar() {
+  const d = S.detail;
+  const btn = $('#d-star');
+  if (!d || !btn) return;
+  const starred = !!(d.starred || (S.marks[d.id] && S.marks[d.id].starred));
+  btn.innerHTML = starred ? STAR_FILLED : STAR_OUTLINE;
+  btn.classList.toggle('on', starred);
+  btn.title = starred ? '已收藏 · 点击取消' : '收藏';
+  btn.setAttribute('aria-pressed', String(starred));
 }
 
 function renderTurns() {

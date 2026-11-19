@@ -309,6 +309,18 @@ func (ix *Index) scanLocked() error {
 		}
 	}
 	resetForkScan(anchors)
+
+	// 会话有增删时整体重扫一遍，否则 fork 认亲拿不到新的锚点证据
+	fullRescan := len(prev) != len(paths)
+	if !fullRescan {
+		for _, p := range paths {
+			id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
+			if _, ok := prev[id]; !ok {
+				fullRescan = true
+				break
+			}
+		}
+	}
 	defer takeForkFindings()
 
 	out := make(map[string]*SessionInfo, len(paths))
@@ -325,7 +337,7 @@ func (ix *Index) scanLocked() error {
 		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
 
 		// Reuse an identical previous parse.
-		if old, ok := prev[id]; ok && old.Size == fi.Size() && old.modTime == fi.ModTime().UnixNano() {
+		if old, ok := prev[id]; ok && !fullRescan && old.Size == fi.Size() && old.modTime == fi.ModTime().UnixNano() {
 			mu.Lock()
 			out[id] = old
 			mu.Unlock()
@@ -999,10 +1011,6 @@ func (ix *Index) Delete(ids []string) ([]string, map[string]string) {
 		info, ok := ix.Get(id)
 		if !ok {
 			errs[id] = "会话不存在"
-			continue
-		}
-		if ix.isRunning(id) {
-			errs[id] = "会话正在运行，已跳过"
 			continue
 		}
 		if err := ix.moveToTrash(info); err != nil {

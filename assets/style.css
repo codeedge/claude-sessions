@@ -347,6 +347,7 @@ body[data-view="trash"] .sidebar { display: none; }
   background: var(--bg-2); line-height: 1.6;
 }
 .badge.fork { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.warn-text { color: #f0b429; font-size: 12.5px; }
 .link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline dotted; }
 .link-btn:hover { text-decoration: underline; }
 .badge.live { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
@@ -788,3 +789,5 @@ dialog p { margin: 0 0 18px; color: var(--fg-dim); font-size: 13px; white-space:
   .topbar { gap: 10px; }
   .brand-name { display: none; }
 }
+
+#cf-body { white-space: pre-line; }

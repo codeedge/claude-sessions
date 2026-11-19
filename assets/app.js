@@ -1790,7 +1790,10 @@ function exportMd() {
 async function deleteOne() {
   const d = S.detail;
   if (!d) return;
-  const ok = await confirmDialog('删除会话', `「${truncate(d.title || d.id, 60)}」将被移入回收站，可随时恢复。`, '移入回收站');
+  const warn = d.running
+    ? '\n注意：该会话的进程还在运行，删除后 CLI 会继续往已移走的副本里写，直到退出。'
+    : '';
+  const ok = await confirmDialog('删除会话', `「${truncate(d.title || d.id, 60)}」将被移入回收站，可随时恢复。${warn}`, '移入回收站');
   if (!ok) return;
   try {
     const res = await api('/api/delete', {

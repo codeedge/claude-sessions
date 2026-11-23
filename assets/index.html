@@ -44,6 +44,15 @@
       <button class="side-new" id="new-session-top" title="新建会话（选择目录）">＋</button>
     </div>
     <nav id="projects" class="projects"></nav>
+    <div class="side-foot-row">
+      <button class="side-gear" id="open-settings" title="设置">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M19.2 13.6a7.6 7.6 0 0 0 0-3.2l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.8-1.6L14 3.2h-4l-.3 2.1a7.6 7.6 0 0 0-2.8 1.6l-2-.8L3.1 9.2l1.7 1.2a7.6 7.6 0 0 0 0 3.2l-1.7 1.2 1.8 3.1 2-.8a7.6 7.6 0 0 0 2.8 1.6l.3 2.1h4l.3-2.1a7.6 7.6 0 0 0 2.8-1.6l2 .8 1.8-3.1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        <span>设置</span>
+      </button>
+    </div>
     <div class="side-foot" id="side-foot"></div>
   </aside>
 
@@ -165,7 +174,11 @@
   <div class="pick-quick" id="pick-quick"></div>
 
   <div class="pick-bar">
-    <button class="icon-btn" id="pick-up" title="上一级">↑</button>
+    <button class="icon-btn pick-up" id="pick-up" title="上一级" aria-label="上一级">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <path d="M12 19V6M6 11.5L12 5.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
     <span class="pick-path" id="pick-path"></span>
   </div>
   <div class="pick-list" id="pick-list"></div>
@@ -173,6 +186,37 @@
   <div class="dlg-actions">
     <button class="btn ghost" id="new-cancel">取消</button>
     <button class="btn primary" id="new-ok">在此目录创建</button>
+  </div>
+</dialog>
+
+<dialog id="settings-dialog" class="dialog">
+  <h2>默认设置</h2>
+  <div class="dlg-sub">新建会话和继续对话时会用这里的默认值。没设的项跟随 Claude CLI 的配置。</div>
+
+  <label class="field">
+    <span>默认模型 <em id="set-model-src"></em></span>
+    <select id="set-model"></select>
+  </label>
+  <label class="field">
+    <span>思考强度 <em id="set-effort-src"></em></span>
+    <select id="set-effort"></select>
+  </label>
+  <label class="field">
+    <span>权限模式 <em id="set-mode-src"></em></span>
+    <select id="set-mode">
+      <option value="">跟随 CLI</option>
+      <option value="ask">每次询问权限</option>
+      <option value="acceptEdits">自动接受编辑</option>
+      <option value="plan">只读（规划）</option>
+      <option value="bypassPermissions">跳过全部权限</option>
+    </select>
+  </label>
+
+  <div class="dlg-actions">
+    <button class="btn ghost" id="set-reset">恢复跟随 CLI</button>
+    <span style="flex:1"></span>
+    <button class="btn ghost" id="set-cancel">取消</button>
+    <button class="btn primary" id="set-save">保存</button>
   </div>
 </dialog>
 

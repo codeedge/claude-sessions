@@ -254,6 +254,9 @@ const CHAT = {
   models: [],
 };
 
+// 服务端下发的默认选项（模型/强度/权限）
+const DEFAULTS = { model: '', effort: '', permissionMode: '', cli: {}, overrides: {} };
+
 const EFFORT_LEVELS = [
   ['', '默认强度'], ['low', '低'], ['medium', '中'], ['high', '高'], ['xhigh', '很高'], ['max', '最高'],
 ];
@@ -338,9 +341,11 @@ function init() {
   initComposer();
   initPermissionDialog();
   initNewSession();
-  for (const id of ['#new-dialog', '#perm-dialog', '#fav-dialog', '#rename-dialog', '#confirm-dialog']) {
+  initSettings();
+  for (const id of ['#new-dialog', '#perm-dialog', '#fav-dialog', '#rename-dialog', '#confirm-dialog', '#settings-dialog']) {
     enableBackdropClose($(id));
   }
+  loadSettings();
 
   $('#search').addEventListener('input', debounce(onSearchInput, 160));
   $('#clear-search').addEventListener('click', () => {
@@ -2212,20 +2217,8 @@ function initComposer() {
   const effortSel = $('#c-effort');
   const modeSel = $('#c-mode');
 
-  const saved = JSON.parse(localStorage.getItem('chatOpts') || '{}');
-  if (saved.mode) modeSel.value = saved.mode;
-
   effortSel.innerHTML = EFFORT_LEVELS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
-  if (saved.effort) effortSel.value = saved.effort;
-
-  const onOpt = () => {
-    localStorage.setItem('chatOpts', JSON.stringify({
-      model: modelSel.value, effort: effortSel.value, mode: modeSel.value,
-    }));
-  };
-  modelSel.addEventListener('change', onOpt);
-  effortSel.addEventListener('change', onOpt);
-  modeSel.addEventListener('change', onOpt);
+  applyDefaultsToComposer();
 
   $('#c-send').addEventListener('click', sendChat);
   $('#c-stop').addEventListener('click', stopChat);
@@ -2255,14 +2248,92 @@ async function loadChatModels() {
 
 function fillModelOptions(models) {
   const sel = $('#c-model');
-  const cur = sel.value;
   const list = [...new Set([...models].filter(Boolean))];
-  const saved = JSON.parse(localStorage.getItem('chatOpts') || '{}');
-  sel.innerHTML = ['<option value="">默认模型</option>']
+  if (DEFAULTS.model && !list.includes(DEFAULTS.model)) list.unshift(DEFAULTS.model);
+  sel.innerHTML = ['<option value="">跟随 CLI 默认</option>']
     .concat(list.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`))
     .join('');
-  const want = cur || saved.model || '';
-  if (want && list.includes(want)) sel.value = want;
+  applyDefaultsToComposer();
+}
+
+// 把服务端默认值套到输入区的三个下拉上
+function applyDefaultsToComposer() {
+  const m = $('#c-model');
+  const e = $('#c-effort');
+  const p = $('#c-mode');
+  if (!m || !e || !p) return;
+  if (DEFAULTS.model) {
+    if (![...m.options].some((o) => o.value === DEFAULTS.model)) {
+      m.insertAdjacentHTML('beforeend', `<option value="${esc(DEFAULTS.model)}">${esc(DEFAULTS.model)}</option>`);
+    }
+    m.value = DEFAULTS.model;
+  } else {
+    m.value = '';
+  }
+  e.value = DEFAULTS.effort || '';
+  p.value = DEFAULTS.permissionMode || 'ask';
+}
+
+async function loadSettings() {
+  try {
+    const r = await api('/api/settings');
+    DEFAULTS.model = r.model || '';
+    DEFAULTS.effort = r.effort || '';
+    DEFAULTS.permissionMode = r.permissionMode || '';
+    DEFAULTS.cli = r.cli || {};
+    DEFAULTS.overrides = r.overrides || {};
+    applyDefaultsToComposer();
+  } catch {}
+}
+
+// ------------------------------------------------------------ 设置
+function initSettings() {
+  const dlg = $('#settings-dialog');
+
+  $('#open-settings').addEventListener('click', async () => {
+    await loadSettings();
+    $('#set-effort').innerHTML = EFFORT_LEVELS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+
+    const models = await api('/api/chat/models').catch(() => ({ models: [] }));
+    const list = [...new Set([...(models.models || []), DEFAULTS.model, DEFAULTS.cli.model].filter(Boolean))];
+    $('#set-model').innerHTML = ['<option value="">跟随 CLI</option>']
+      .concat(list.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`)).join('');
+
+    $('#set-model').value = DEFAULTS.overrides.model || '';
+    $('#set-effort').value = DEFAULTS.overrides.effort || '';
+    $('#set-mode').value = DEFAULTS.overrides.permissionMode || '';
+
+    $('#set-model-src').textContent = DEFAULTS.cli.model ? `（CLI: ${DEFAULTS.cli.model}）` : '';
+    $('#set-effort-src').textContent = DEFAULTS.cli.effort ? `（CLI: ${DEFAULTS.cli.effort}）` : '';
+    $('#set-mode-src').textContent = DEFAULTS.cli.permissionMode ? `（CLI: ${DEFAULTS.cli.permissionMode}）` : '';
+
+    dlg.returnValue = '';
+    dlg.showModal();
+  });
+
+  $('#set-cancel').addEventListener('click', () => dlg.close('cancel'));
+  $('#set-reset').addEventListener('click', () => {
+    $('#set-model').value = '';
+    $('#set-effort').value = '';
+    $('#set-mode').value = '';
+  });
+  $('#set-save').addEventListener('click', async () => {
+    try {
+      await api('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: $('#set-model').value,
+          effort: $('#set-effort').value,
+          permissionMode: $('#set-mode').value,
+        }),
+      });
+      dlg.close('saved');
+      await loadSettings();
+      toast('设置已保存');
+    } catch (err) {
+      toast('保存失败: ' + err.message, true);
+    }
+  });
 }
 
 async function sendChat() {

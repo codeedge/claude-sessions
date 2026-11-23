@@ -960,3 +960,17 @@ body:has(dialog[open]) .badge.live {
 }
 /* 目录列表滚动时避免触发整页重排 */
 .pick-list { contain: content; overscroll-behavior: contain; }
+
+/* 设置入口 */
+.side-foot-row { padding: 0 10px 6px; }
+.side-gear {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 7px 10px; border-radius: 8px;
+  border: 1px solid transparent; background: none;
+  color: var(--fg-dim); font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.side-gear:hover { background: var(--bg-2); color: var(--fg); border-color: var(--line-soft); }
+.side-gear svg { opacity: .8; }
+.pick-up { display: inline-flex; align-items: center; justify-content: center; }
+.pick-up:disabled { opacity: .35; }
+dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; }

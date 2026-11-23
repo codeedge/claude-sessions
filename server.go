@@ -21,16 +21,18 @@ import (
 var assetsFS embed.FS
 
 type Server struct {
-	ix    *Index
-	marks *MarkStore
-	mux   *http.ServeMux
-	addr  string
-	chat  *chatManager
+	ix       *Index
+	marks    *MarkStore
+	mux      *http.ServeMux
+	addr     string
+	chat     *chatManager
+	settings *settingsStore
 }
 
 func NewServer(ix *Index, marks *MarkStore, addr, stateDir string) *Server {
 	s := &Server{ix: ix, marks: marks, mux: http.NewServeMux(), addr: addr}
 	s.chat = newChatManager(ix, stateDir)
+	s.settings = newSettingsStore(stateDir)
 	s.chat.base = "http://" + addr
 	s.routes()
 	return s
@@ -66,6 +68,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
 	s.mux.HandleFunc("GET /api/chat/models", s.handleChatModels)
 	s.mux.HandleFunc("GET /api/fs/dirs", s.handleDirs)
+	s.mux.HandleFunc("GET /api/settings", s.handleSettings)
+	s.mux.HandleFunc("POST /api/settings", s.handleSaveSettings)
 	s.mux.HandleFunc("POST /api/chat/send", s.handleChatSend)
 	s.mux.HandleFunc("GET /api/chat/stream/{id}", s.handleChatStream)
 	s.mux.HandleFunc("GET /api/chat/status/{id}", s.handleChatStatus)

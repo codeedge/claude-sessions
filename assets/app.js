@@ -2599,6 +2599,12 @@ async function sendChat() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (res.action === 'clear') {
+      // /clear：开一条新会话
+      startNewSession(res.cwd || S.detail.cwd || '');
+      toast('已开新会话');
+      return;
+    }
     if (!res.ok) throw new Error('发送失败');
     S.isNew = false;
     startLiveBubble(text);
@@ -2800,6 +2806,14 @@ function handleChatLine(line) {
   let ev;
   try { ev = JSON.parse(line); } catch { return; }
 
+  if (ev.type === 'ui_subtask') {
+    liveAppend(`<div class="live-note">↳ 已在后台启动子任务（新会话 ${esc(String(ev.id).slice(0, 8))}）</div>`);
+    return;
+  }
+  if (ev.type === 'ui_subtask_done') {
+    liveAppend(`<div class="live-note">↳ 子任务结束（退出码 ${esc(String(ev.code))}），已出现在会话列表</div>`);
+    return;
+  }
   if (ev.type === 'ui_permission') {
     showPermission(ev);
     return;

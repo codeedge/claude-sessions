@@ -191,6 +191,22 @@ func (m *chatManager) send(req chatSendRequest) error {
 	}
 	s.mu.Unlock()
 
+	// /clear、/subtask 这类是 CLI 客户端自己实现的命令，print 模式不会执行，
+	// 这里按同样的语义接管。
+	if cmd, arg := localSlash(req.Text); cmd != "" {
+		switch cmd {
+		case "clear":
+			return errClearRequested
+		case "compact":
+			return fmt.Errorf("/compact 在网页版暂不支持，可以在终端里执行")
+		case "subtask":
+			if arg == "" {
+				return fmt.Errorf("用法：/subtask <任务描述>")
+			}
+			return m.startSubtask(req, arg)
+		}
+	}
+
 	cwd := req.CWD
 	if cwd == "" {
 		cwd = userHome()
@@ -440,4 +456,108 @@ func envWithout(key string) []string {
 		out = append(out, kv)
 	}
 	return out
+}
+
+// errClearRequested 表示用户要求开新会话
+var errClearRequested = fmt.Errorf("__clear__")
+
+// localSlash 识别「CLI 客户端自己处理」的命令
+func localSlash(text string) (cmd, arg string) {
+	t := strings.TrimSpace(text)
+	if !strings.HasPrefix(t, "/") {
+		return "", ""
+	}
+	head, rest, _ := strings.Cut(t, " ")
+	name := strings.TrimPrefix(strings.TrimSpace(head), "/")
+	switch name {
+	case "clear", "compact", "subtask", "model", "config", "resume", "exit", "quit":
+		return name, strings.TrimSpace(rest)
+	}
+	return "", ""
+}
+
+// startSubtask 用 --fork-session 在后台跑一个带上下文的任务，
+// 产出是一个新的分支会话，跑完会出现在列表里。
+func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
+	claude := resolveClaude()
+	cwd := usableDir(req.CWD)
+
+	id := newSessionID()
+	args := []string{
+		"-p",
+		"--input-format", "stream-json",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--resume", req.SessionID,
+		"--fork-session",
+		"--session-id", id,
+		"--permission-mode", "acceptEdits",
+	}
+	if req.Model != "" {
+		args = append(args, "--model", req.Model)
+	}
+	if req.Effort != "" {
+		args = append(args, "--effort", req.Effort)
+	}
+
+	s := m.session(req.SessionID)
+	cmd := exec.Command(claude, args...)
+	cmd.Dir = cwd
+	cmd.Env = baseEnv()
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动子任务失败: %w", err)
+	}
+
+	s.publish(meta("subtask", map[string]any{"id": id, "task": task}))
+
+	go func() {
+		payload, _ := json.Marshal(map[string]any{
+			"type":    "user",
+			"message": map[string]any{"role": "user", "content": task},
+		})
+		_, _ = stdin.Write(append(payload, '\n'))
+		_ = stdin.Close()
+
+		sc := bufio.NewScanner(stdout)
+		sc.Buffer(make([]byte, 0, 256<<10), 8<<20)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line != "" {
+				s.publish(line)
+			}
+		}
+		err := cmd.Wait()
+		code := 0
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				code = ee.ExitCode()
+			} else {
+				code = -1
+			}
+		}
+		s.publish(meta("subtask_done", map[string]any{"id": id, "code": code}))
+		if m.index != nil {
+			go m.index.MaybeRescan(0)
+		}
+	}()
+	return nil
+}
+
+// newSessionID 生成一个随机 UUID v4
+func newSessionID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

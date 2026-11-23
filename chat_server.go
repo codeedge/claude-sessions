@@ -18,6 +18,11 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.chat.send(req); err != nil {
+		if err == errClearRequested {
+			// /clear：给前端一个新会话 ID，让它切过去
+			writeJSON(w, 200, map[string]any{"action": "clear", "sessionId": newSessionID(), "cwd": req.CWD})
+			return
+		}
 		writeErr(w, 400, err.Error())
 		return
 	}

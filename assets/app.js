@@ -2522,18 +2522,16 @@ function renderChatStatus() {
   const age = sessionAge();
   if (age) info.push(`<span class="cs-age" title="会话开始于 ${esc(abs(d.createdAt))}">${esc(age)}</span>`);
 
-  const model = [];
-  if (CHAT.model) model.push(`<span class="cs-model">${esc(CHAT.model)}</span>`);
-  if (CHAT.effort) model.push(`强度 <b>${esc(effortLabel(CHAT.effort))}</b>`);
-  if (CHAT.mode) model.push(esc(modeLabel(CHAT.mode)));
-  if (CHAT.turn && CHAT.turn.out) model.push(`本轮 <b>${fmtNum(CHAT.turn.in)}</b> in / <b>${fmtNum(CHAT.turn.out)}</b> out`);
-  if (CHAT.turn && CHAT.turn.sec) model.push(`${CHAT.turn.sec.toFixed(1)}s`);
-  if (CHAT.turn && CHAT.turn.cost) model.push(`$${CHAT.turn.cost.toFixed(4)}`);
+  // 模型/强度/权限就在下面的下拉里，这里不再重复；只补本轮用量
+  if (CHAT.turn && CHAT.turn.out) {
+    info.push(`<span class="cs-turn">本轮 <b>${fmtNum(CHAT.turn.in)}</b> in / <b>${fmtNum(CHAT.turn.out)}</b> out</span>`);
+  }
+  if (CHAT.turn && CHAT.turn.sec) info.push(`${CHAT.turn.sec.toFixed(1)}s`);
+  if (CHAT.turn && CHAT.turn.cost) info.push(`$${CHAT.turn.cost.toFixed(4)}`);
 
-  const row1 = info.join('<span class="cs-sep">·</span>');
-  const row2 = model.join('<span class="cs-sep">·</span>');
-  el.innerHTML = [row1, row2].filter(Boolean).map((r) => `<div class="cs-row">${r}</div>`).join('');
-  el.hidden = !row1 && !row2;
+  const row = info.join('<span class="cs-sep">·</span>');
+  el.innerHTML = row ? `<div class="cs-row">${row}</div>` : '';
+  el.hidden = !row;
 }
 
 let ageTimer = null;

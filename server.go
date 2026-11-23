@@ -25,10 +25,13 @@ type Server struct {
 	marks *MarkStore
 	mux   *http.ServeMux
 	addr  string
+	chat  *chatManager
 }
 
-func NewServer(ix *Index, marks *MarkStore, addr string) *Server {
+func NewServer(ix *Index, marks *MarkStore, addr, stateDir string) *Server {
 	s := &Server{ix: ix, marks: marks, mux: http.NewServeMux(), addr: addr}
+	s.chat = newChatManager(ix, stateDir)
+	s.chat.base = "http://" + addr
 	s.routes()
 	return s
 }
@@ -61,6 +64,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/trash/restore", s.handleRestore)
 	s.mux.HandleFunc("POST /api/trash/purge", s.handlePurge)
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
+	s.mux.HandleFunc("GET /api/chat/models", s.handleChatModels)
+	s.mux.HandleFunc("POST /api/chat/send", s.handleChatSend)
+	s.mux.HandleFunc("GET /api/chat/stream/{id}", s.handleChatStream)
+	s.mux.HandleFunc("GET /api/chat/status/{id}", s.handleChatStatus)
+	s.mux.HandleFunc("POST /api/chat/stop", s.handleChatStop)
+	s.mux.HandleFunc("POST /api/chat/ask", s.handleChatAsk)
+	s.mux.HandleFunc("POST /api/chat/answer", s.handleChatAnswer)
 	s.mux.HandleFunc("POST /api/rename", s.handleRename)
 }
 

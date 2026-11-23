@@ -801,6 +801,17 @@ func (ix *Index) RecentCWD() string {
 	return best
 }
 
+// AllSessions 返回所有会话的快照（只读用途）
+func (ix *Index) AllSessions() []*SessionInfo {
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	out := make([]*SessionInfo, 0, len(ix.sessions))
+	for _, s := range ix.sessions {
+		out = append(out, s)
+	}
+	return out
+}
+
 func (ix *Index) Get(id string) (*SessionInfo, bool) {
 	ix.mu.RLock()
 	defer ix.mu.RUnlock()

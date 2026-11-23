@@ -57,6 +57,7 @@
           <label class="chk" id="select-all-wrap" hidden>
             <input type="checkbox" id="select-all"> 全选
           </label>
+          <button class="btn" id="new-session" title="新建一个会话">＋ 新建会话</button>
           <button class="btn ghost" id="bulk-star" hidden>★ 收藏</button>
           <button class="btn ghost" id="bulk-unstar" hidden>☆ 取消收藏</button>
           <button class="btn danger" id="bulk-delete" hidden>删除所选 <span id="bulk-count"></span></button>
@@ -110,6 +111,25 @@
           <nav id="outline-list" class="outline-list"></nav>
         </aside>
       </div>
+
+      <div class="composer" id="composer">
+        <div class="composer-bar">
+          <select id="c-model" title="模型"></select>
+          <select id="c-effort" title="思考强度"></select>
+          <select id="c-mode" title="权限模式">
+            <option value="ask">每次询问权限</option>
+            <option value="acceptEdits">自动接受编辑</option>
+            <option value="plan">只读（规划）</option>
+            <option value="bypassPermissions">跳过全部权限</option>
+          </select>
+          <span class="composer-hint" id="c-hint">Enter 发送 · Shift+Enter 换行</span>
+          <button class="btn danger ghost" id="c-stop" hidden>停止</button>
+        </div>
+        <div class="composer-input">
+          <textarea id="c-input" rows="1" placeholder="继续这个会话…"></textarea>
+          <button class="btn primary" id="c-send">发送</button>
+        </div>
+      </div>
       <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
 
       <div class="jump-nav" id="jump-nav" hidden>
@@ -137,6 +157,29 @@
 
   </main>
 </div>
+
+<dialog id="new-dialog" class="dialog">
+  <h2>新建会话</h2>
+  <div class="dlg-sub">在哪个目录里开始？会作为该会话的工作目录。</div>
+  <label class="field">
+    <span>目录</span>
+    <input id="new-cwd" type="text" spellcheck="false" placeholder="/path/to/project">
+  </label>
+  <div class="dlg-actions">
+    <button class="btn ghost" id="new-cancel">取消</button>
+    <button class="btn primary" id="new-ok">创建</button>
+  </div>
+</dialog>
+
+<dialog id="perm-dialog" class="dialog">
+  <h2>需要你确认</h2>
+  <div class="dlg-sub" id="perm-sub"></div>
+  <pre class="perm-body" id="perm-body"></pre>
+  <div class="dlg-actions">
+    <button class="btn ghost" id="perm-deny">拒绝</button>
+    <button class="btn primary" id="perm-allow">允许</button>
+  </div>
+</dialog>
 
 <div id="img-viewer" hidden aria-hidden="true"><img id="img-viewer-img" alt=""><div id="img-viewer-num"></div></div>
 <div id="hovercard" class="hovercard" hidden></div>

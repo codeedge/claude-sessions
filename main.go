@@ -59,6 +59,7 @@ func main() {
   claude-sessions [web] [选项]   启动网页界面
   claude-sessions list [选项]    在终端列出会话
   claude-sessions scan [选项]    只扫描并输出统计
+  claude-sessions mcp            （内部）作为 MCP server 回答权限询问
 
 选项:
 `, version)
@@ -70,6 +71,12 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	// 作为 MCP server 被子进程调起：走 stdio，不扫描会话、不打日志
+	if cmd == "mcp" {
+		runMCPServer()
+		return
+	}
+
 	if err := os.MkdirAll(*state, 0o755); err != nil {
 		log.Fatalf("创建状态目录失败: %v", err)
 	}
@@ -102,7 +109,7 @@ func main() {
 		log.Fatalf("未知命令 %q，可用: web / list / scan", cmd)
 	}
 
-	srv := NewServer(ix, marks, fmt.Sprintf("%s:%d", *host, *port))
+	srv := NewServer(ix, marks, fmt.Sprintf("%s:%d", *host, *port), *state)
 	ln, url, err := srv.Listen()
 	if err != nil {
 		log.Fatalf("监听失败: %v", err)

@@ -245,6 +245,19 @@ function clearHighlight(root) {
 const STAR_FILLED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.94 5.96 6.58.96-4.76 4.64 1.12 6.55L12 17.62l-5.88 3.09 1.12-6.55L2.48 9.52l6.58-.96z" fill="currentColor"/></svg>';
 const STAR_OUTLINE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.3l2.35 4.77 5.26.77-3.81 3.71.9 5.24L12 16.32l-4.7 2.47.9-5.24-3.81-3.71 5.26-.77z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
 
+// 当前会话的聊天状态：SSE 连接、流式内容、待确认的权限请求
+const CHAT = {
+  es: null,
+  id: null,
+  live: null, // { el, textEl, thinkEl, tools: [] }
+  pending: null,
+  models: [],
+};
+
+const EFFORT_LEVELS = [
+  ['', '默认强度'], ['low', '低'], ['medium', '中'], ['high', '高'], ['xhigh', '很高'], ['max', '最高'],
+];
+
 const S = {
   stats: null,
   projects: [],
@@ -321,6 +334,10 @@ async function checkBuild() {
 function init() {
   const savedTheme = localStorage.getItem('cs-theme');
   if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+
+  initComposer();
+  initPermissionDialog();
+  initNewSession();
 
   $('#search').addEventListener('input', debounce(onSearchInput, 160));
   $('#clear-search').addEventListener('click', () => {
@@ -1276,7 +1293,11 @@ async function openDetail(id, agent = null, turn = 0) {
     }
     renderDetail();
     startLiveWatch(id);
+    startChatStream(id);
+    loadChatModels();
+    // 默认停在最底部（最新一轮），除非明确指定了要跳的轮次
     if (turn) await jumpToTurn(turn, false);
+    else requestAnimationFrame(() => { $('#main').scrollTop = $('#main').scrollHeight; });
   } catch (err) {
     $('#conv').innerHTML = `<div class="empty"><h3>无法打开会话</h3><div>${esc(err.message)}</div></div>`;
   }
@@ -1285,6 +1306,7 @@ async function openDetail(id, agent = null, turn = 0) {
 function closeDetail() {
   if (document.body.dataset.view !== 'detail') return;
   stopLiveWatch();
+  stopChatStream();
   S.detailId = null;
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -1301,6 +1323,7 @@ function renderDetail() {
   $('#d-sub').textContent = (d.cwd || d.project || '') + (d.branch ? '  ·  ' + d.branch : '');
 
   renderBranchBanner();
+  $('#composer').hidden = !!d.subagent;
 
   const bits = [
     ['会话 ID', d.subagent ? `${d.id} / ${d.agentType}` : d.id],
@@ -1412,6 +1435,10 @@ async function refreshTail() {
       <span class="n">${t.index}</span><span class="p">${esc(truncate(turnLabel(t), 34))}</span></button>`).join(''));
   }
 
+  if (d.title && S.detail && d.title !== S.detail.title) {
+    S.detail.title = d.title;
+    $('#d-title').textContent = d.title;
+  }
   if (d.totalTurns) S.totalTurns = d.totalTurns;
   S.from = S.turns.length;
   if (atBottom) main.scrollTop = main.scrollHeight;
@@ -2160,3 +2187,354 @@ init();
   const params = new URLSearchParams(m[2] || '');
   openDetail(decodeURIComponent(m[1]), params.get('agent') || null, Number(params.get('turn')) || 0);
 })();
+
+/* ------------------------------------------------------------------ 聊天 */
+
+function initComposer() {
+  const modelSel = $('#c-model');
+  const effortSel = $('#c-effort');
+  const modeSel = $('#c-mode');
+
+  const saved = JSON.parse(localStorage.getItem('chatOpts') || '{}');
+  if (saved.mode) modeSel.value = saved.mode;
+
+  effortSel.innerHTML = EFFORT_LEVELS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  if (saved.effort) effortSel.value = saved.effort;
+
+  const onOpt = () => {
+    localStorage.setItem('chatOpts', JSON.stringify({
+      model: modelSel.value, effort: effortSel.value, mode: modeSel.value,
+    }));
+  };
+  modelSel.addEventListener('change', onOpt);
+  effortSel.addEventListener('change', onOpt);
+  modeSel.addEventListener('change', onOpt);
+
+  $('#c-send').addEventListener('click', sendChat);
+  $('#c-stop').addEventListener('click', stopChat);
+
+  const ta = $('#c-input');
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+  });
+}
+
+let modelsLoaded = false;
+async function loadChatModels() {
+  if (modelsLoaded) return;
+  try {
+    const r = await api('/api/chat/models');
+    fillModelOptions(r.models || []);
+    modelsLoaded = true;
+  } catch {}
+}
+
+function fillModelOptions(models) {
+  const sel = $('#c-model');
+  const cur = sel.value;
+  const list = [...new Set([...models].filter(Boolean))];
+  const saved = JSON.parse(localStorage.getItem('chatOpts') || '{}');
+  sel.innerHTML = ['<option value="">默认模型</option>']
+    .concat(list.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`))
+    .join('');
+  const want = cur || saved.model || '';
+  if (want && list.includes(want)) sel.value = want;
+}
+
+async function sendChat() {
+  const ta = $('#c-input');
+  const text = ta.value.trim();
+  if (!text || !S.detailId) return;
+
+  const d = S.detail || {};
+  ta.value = '';
+  ta.style.height = 'auto';
+
+  const body = {
+    sessionId: S.detailId,
+    text,
+    cwd: d.cwd || d.project || '',
+    newSession: !!S.isNew,
+    model: $('#c-model').value,
+    effort: $('#c-effort').value,
+    permissionMode: $('#c-mode').value,
+  };
+
+  try {
+    const res = await api('/api/chat/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('发送失败');
+    S.isNew = false;
+    startLiveBubble(text);
+  } catch (err) {
+    toast('发送失败: ' + err.message, true);
+    ta.value = text;
+  }
+}
+
+async function stopChat() {
+  if (!S.detailId) return;
+  try {
+    await api('/api/chat/stop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: S.detailId }),
+    });
+    toast('已停止');
+  } catch (err) {
+    toast('停止失败: ' + err.message, true);
+  }
+}
+
+// 起一个「正在回答」的临时块，接在最后一轮后面
+function startLiveBubble(userText) {
+  const box = $('#conv');
+  const wrap = document.createElement('article');
+  wrap.className = 'turn live-turn';
+  wrap.innerHTML = `
+    <div class="prompt-box"><span class="lbl">用户</span>${esc(userText)}</div>
+    <div class="live-body"></div>`;
+  box.appendChild(wrap);
+  CHAT.live = { el: wrap, body: wrap.querySelector('.live-body'), textEl: null, thinkEl: null, tools: new Map() };
+  $('#c-stop').hidden = false;
+  scrollToBottomSoon();
+}
+
+function liveAppend(html) {
+  if (!CHAT.live) return;
+  CHAT.live.body.insertAdjacentHTML('beforeend', html);
+  scrollToBottomSoon();
+}
+
+function scrollToBottomSoon() {
+  const m = $('#main');
+  if (m.scrollHeight - m.clientHeight - m.scrollTop < 200) {
+    requestAnimationFrame(() => { m.scrollTop = m.scrollHeight; });
+  }
+}
+
+function ensureTextEl() {
+  if (!CHAT.live.textEl) {
+    CHAT.live.body.insertAdjacentHTML('beforeend', '<div class="live-text"></div>');
+    const els = CHAT.live.body.querySelectorAll('.live-text');
+    CHAT.live.textEl = els[els.length - 1];
+  }
+  return CHAT.live.textEl;
+}
+
+function ensureThinkEl() {
+  if (!CHAT.live.thinkEl) {
+    const el = document.createElement('details');
+    el.className = 'think live-think';
+    el.innerHTML = '<summary>思考过程</summary><div class="live-think-body"></div>';
+    CHAT.live.body.appendChild(el);
+    CHAT.live.thinkEl = el.querySelector('.live-think-body');
+  }
+  return CHAT.live.thinkEl;
+}
+
+// 处理 CLI 的一条 stream-json 事件
+function handleChatLine(line) {
+  let ev;
+  try { ev = JSON.parse(line); } catch { return; }
+
+  if (ev.type === 'ui_permission') {
+    showPermission(ev);
+    return;
+  }
+  if (ev.type === 'ui_started') {
+    $('#c-stop').hidden = false;
+    return;
+  }
+  if (ev.type === 'ui_stderr') {
+    liveAppend(`<div class="live-err">${esc(ev.text || '')}</div>`);
+    return;
+  }
+  if (ev.type === 'ui_exit') {
+    $('#c-stop').hidden = true;
+    if (CHAT.live && CHAT.live.thinkEl) {
+      CHAT.live.thinkEl.closest('details').open = false;
+    }
+    CHAT.live = null;
+    return;
+  }
+
+  if (ev.type === 'stream_event') {
+    const e = ev.event || {};
+    if (e.type === 'content_block_start') {
+      const cb = e.content_block || {};
+      if (cb.type === 'thinking') ensureThinkEl();
+      else if (cb.type === 'tool_use') startToolBlock(cb);
+      else ensureTextEl();
+    } else if (e.type === 'content_block_delta') {
+      const d = e.delta || {};
+      if (d.type === 'text_delta') {
+        ensureTextEl().textContent += d.text || '';
+        scrollToBottomSoon();
+      } else if (d.type === 'thinking_delta') {
+        ensureThinkEl().textContent += d.thinking || '';
+      } else if (d.type === 'input_json_delta') {
+        appendToolInput(d.partial_json || '');
+      }
+    } else if (e.type === 'content_block_stop') {
+      CHAT.live && (CHAT.live.textEl = null, CHAT.live.thinkEl = null);
+    }
+    return;
+  }
+
+  if (ev.type === 'result') {
+    // 一轮结束：会话文件已更新，让详情页落到最新
+    if (ev.is_error) liveAppend(`<div class="live-err">${esc(ev.result || '出错了')}</div>`);
+    const id = S.detailId;
+    setTimeout(async () => {
+      if (!id || S.detailId !== id) return;
+      try {
+        await refreshTail();
+      } catch {
+        // 新会话此时才刚进索引，整页重载一次
+        try { await openDetail(id); } catch {}
+      }
+    }, 900);
+  }
+}
+
+let toolSeq = 0;
+function startToolBlock(cb) {
+  const id = cb.id || 'tool' + (++toolSeq);
+  const el = document.createElement('details');
+  el.className = 'tool live-tool';
+  el.innerHTML = `<summary><span class="tool-name">${esc(cb.name || '工具')}</span> <span class="tool-status">运行中…</span></summary>
+    <div class="tool-input"></div>`;
+  CHAT.live && CHAT.live.body.appendChild(el);
+  CHAT.live && CHAT.live.tools.set(id, { el, input: el.querySelector('.tool-input'), raw: '' });
+  scrollToBottomSoon();
+}
+
+function appendToolInput(chunk) {
+  if (!CHAT.live || !CHAT.live.tools.size) return;
+  const last = [...CHAT.live.tools.values()].pop();
+  last.raw += chunk;
+  last.input.textContent = last.raw.slice(0, 4000);
+}
+
+// ------------------------------------------------------------ 权限确认
+
+function showPermission(ev) {
+  const dlg = $('#perm-dialog');
+  CHAT.pending = ev;
+  $('#perm-sub').textContent = `会话请求执行：${ev.toolName || '未知工具'}`;
+  let body = ev.input;
+  try {
+    if (typeof body === 'string') body = JSON.parse(body);
+    $('#perm-body').textContent = JSON.stringify(body, null, 2).slice(0, 4000);
+  } catch {
+    $('#perm-body').textContent = String(ev.input || '').slice(0, 4000);
+  }
+  dlg.returnValue = '';
+  if (!dlg.open) dlg.showModal();
+}
+
+async function answerPermission(allow) {
+  const ev = CHAT.pending;
+  const dlg = $('#perm-dialog');
+  if (dlg.open) dlg.close();
+  CHAT.pending = null;
+  if (!ev || !S.detailId) return;
+  try {
+    await api('/api/chat/answer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: S.detailId, requestId: ev.requestId, allow }),
+    });
+  } catch (err) {
+    toast('提交失败: ' + err.message, true);
+  }
+}
+
+function initNewSession() {
+  const dlg = $('#new-dialog');
+  $('#new-session').addEventListener('click', () => {
+    const last = S.items.find((i) => i.cwd) || {};
+    $('#new-cwd').value = localStorage.getItem('lastCwd') || last.cwd || '';
+    dlg.returnValue = '';
+    dlg.showModal();
+    $('#new-cwd').focus();
+  });
+  $('#new-cancel').addEventListener('click', () => dlg.close('cancel'));
+  $('#new-ok').addEventListener('click', () => dlg.close('ok'));
+  dlg.addEventListener('close', () => {
+    if (dlg.returnValue !== 'ok') return;
+    const cwd = $('#new-cwd').value.trim();
+    if (!cwd) { toast('请填写目录', true); return; }
+    localStorage.setItem('lastCwd', cwd);
+    startNewSession(cwd);
+  });
+  $('#new-cwd').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); dlg.close('ok'); }
+  });
+}
+
+function startNewSession(cwd) {
+  const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2));
+  stopChatStream();
+  stopLiveWatch();
+  S.detailId = id;
+  S.agent = null;
+  S.isNew = true;
+  S.turns = [];
+  S.totalTurns = 0;
+  S.detail = { id, title: '(新会话)', cwd, project: cwd, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), userMsgs: 0, asstMsgs: 0 };
+  setView('detail');
+  $('#d-title').textContent = '(新会话)';
+  $('#d-sub').textContent = cwd;
+  $('#d-meta').innerHTML = '<span><span class="k">新会话</span> <b>发出第一条消息后才会写入磁盘</b></span>';
+  $('#d-branch').hidden = true;
+  $('#conv').innerHTML = '<div class="empty"><h3>新会话</h3><div>在下面输入第一句话，就会在 ' + esc(cwd) + ' 里创建</div></div>';
+  $('#outline-list').innerHTML = '';
+  history.replaceState(null, '', '#/session/' + encodeURIComponent(id));
+  startChatStream(id);
+  loadChatModels();
+  $('#c-input').focus();
+}
+
+function initPermissionDialog() {
+  $('#perm-allow').addEventListener('click', () => answerPermission(true));
+  $('#perm-deny').addEventListener('click', () => answerPermission(false));
+  $('#perm-dialog').addEventListener('close', () => {
+    if (CHAT.pending) answerPermission(false);
+  });
+}
+
+// ------------------------------------------------------------ SSE 连接
+
+function startChatStream(id) {
+  stopChatStream();
+  CHAT.id = id;
+  const es = new EventSource(`/api/chat/stream/${encodeURIComponent(id)}`);
+  CHAT.es = es;
+  es.addEventListener('state', (e) => {
+    try {
+      const st = JSON.parse(e.data);
+      $('#c-stop').hidden = !st.running;
+    } catch {}
+  });
+  es.onmessage = (e) => handleChatLine(e.data);
+  es.onerror = () => { /* EventSource 自己会重连 */ };
+}
+
+function stopChatStream() {
+  if (CHAT.es) {
+    CHAT.es.close();
+    CHAT.es = null;
+  }
+  CHAT.id = null;
+  CHAT.live = null;
+  $('#c-stop').hidden = true;
+}

@@ -1761,24 +1761,8 @@ function toggleAllDetails() {
 // 详情页右下角的回到顶部 / 回到底部
 // 位置按大纲的实际右边缘算，避免压住大纲文字；大纲隐藏时退回窗口右下角
 function positionJumpNav(nav) {
-  const outline = $('#outline');
-  const visible = outline && getComputedStyle(outline).display !== 'none' && outline.getBoundingClientRect().width > 0;
-  document.body.classList.remove('jump-inside');
-  if (!visible) {
-    nav.style.right = '16px';
-    return;
-  }
-  const r = outline.getBoundingClientRect();
-  const room = window.innerWidth - r.right; // 大纲右边到窗口边缘的空间
-  const need = nav.offsetWidth + 12;
-  if (room >= need + 12) {
-    // 空间够：放到大纲右侧，留 12px
-    nav.style.right = Math.round(room - 12 - nav.offsetWidth) + 'px';
-  } else {
-    // 空间不够（窄窗口）：贴着窗口右边，同时给大纲留出右侧内边距，避免压字
-    nav.style.right = '12px';
-    document.body.classList.add('jump-inside');
-  }
+  // 大纲在左边，跳转按钮固定落在窗口右侧即可
+  nav.style.right = '16px';
 }
 
 function updateJumpNav() {

@@ -460,14 +460,17 @@ body[data-view="trash"] .sidebar { display: none; }
 .subagent-btn { padding: 2px 9px; font-size: 11.5px; border-radius: 20px; }
 
 .detail-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 24px;
+  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px;
   padding: 18px 22px;
   max-width: var(--detail-max);
   margin: 0 auto;
+  align-items: start;
 }
 body.no-outline .detail-body { grid-template-columns: minmax(0, 1fr); }
 body.no-outline .outline { display: none; }
 
+/* 会话正文和输入区在同一个列里，宽度和左边距完全一致 */
+.conv-col { min-width: 0; display: flex; flex-direction: column; }
 .conv { min-width: 0; max-width: var(--conv-max); margin: 0 auto; width: 100%; }
 
 /* 详情页右下角的快速跳转 */
@@ -696,8 +699,8 @@ mark.hl { background: color-mix(in srgb, var(--warn) 45%, transparent); color: i
   align-self: start;
   max-height: calc(100vh - 160px);
   overflow-y: auto;
-  border-left: 1px solid var(--line-soft);
-  padding-left: 14px;
+  border-right: 1px solid var(--line-soft);
+  padding-right: 14px;
 }
 /* 窄窗口下跳转按钮落在窗口右侧，给大纲留出右侧空间避免压字 */
 body.jump-inside .outline { padding-right: 54px; }
@@ -856,7 +859,8 @@ dialog p { margin: 0 0 18px; color: var(--fg-dim); font-size: 13px; white-space:
 /* ---------------------------------------------------------------- 聊天 */
 .composer {
   position: sticky; bottom: 0; z-index: 20;
-  margin-top: 10px; padding: 10px 18px 14px;
+  width: 100%; max-width: var(--conv-max);
+  margin: 10px auto 0; padding: 10px 0 14px;
   background: linear-gradient(to top, var(--bg-0) 70%, color-mix(in srgb, var(--bg-0) 70%, transparent));
   border-top: 1px solid var(--line-soft);
   backdrop-filter: blur(6px);

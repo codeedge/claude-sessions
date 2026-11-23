@@ -114,14 +114,15 @@
       <div class="detail-meta" id="d-meta"></div>
 
       <div class="detail-body">
-        <div class="conv" id="conv"></div>
         <aside class="outline" id="outline">
           <div class="outline-head">会话大纲</div>
           <nav id="outline-list" class="outline-list"></nav>
         </aside>
-      </div>
+        <div class="conv-col">
+          <div class="conv" id="conv"></div>
 
-      <div class="composer" id="composer">
+          <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
+          <div class="composer" id="composer">
         <div class="chat-status" id="chat-status"></div>
         <div class="composer-bar">
           <select id="c-model" title="模型"></select>
@@ -135,12 +136,13 @@
           <span class="composer-hint" id="c-hint">Enter 发送 · Shift+Enter 换行</span>
           <button class="btn danger ghost" id="c-stop" hidden>停止</button>
         </div>
-        <div class="composer-input">
-          <textarea id="c-input" rows="1" placeholder="继续这个会话…"></textarea>
-          <button class="btn primary" id="c-send">发送</button>
+            <div class="composer-input">
+              <textarea id="c-input" rows="1" placeholder="继续这个会话…"></textarea>
+              <button class="btn primary" id="c-send">发送</button>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
 
       <div class="jump-nav" id="jump-nav" hidden>
         <button class="jump-btn" id="jump-top" type="button" title="回到顶部">↑</button>

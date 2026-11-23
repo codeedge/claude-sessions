@@ -2506,9 +2506,17 @@ function renderQuickPicks() {
     picks.push(p);
   }
   const box = $('#pick-quick');
-  box.innerHTML = picks.slice(0, 8).map((p) =>
-    `<button class="quick-chip" data-pick="${esc(p.path)}" title="${esc(p.path)}">${esc(projLabel(p.path))}</button>`
-  ).join('');
+  if (!picks.length) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = `<div class="pick-quick-head">常用位置</div>
+    <div class="pick-quick-list">${picks.slice(0, 10).map((p) =>
+      `<button class="pick-item" data-pick="${esc(p.path)}" title="${esc(p.path)}">
+         <span class="pick-icon"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M3 7.2c0-.9.7-1.6 1.6-1.6h4l1.8 2.1h7.9c.9 0 1.6.7 1.6 1.6v7.5c0 .9-.7 1.6-1.6 1.6H4.6c-.9 0-1.6-.7-1.6-1.6V7.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+         <span class="pick-abs">${esc(p.path)}</span>
+         <span class="pick-n">${p.count}</span>
+       </button>`).join('')}</div>`;
 }
 
 async function browseDir(path) {
@@ -2527,19 +2535,19 @@ async function browseDir(path) {
       $('#pick-up').disabled = true;
       PICK.path = '';
       list.innerHTML = (r.roots || []).map((d) =>
-        `<button class="pick-item root" data-enter="${esc(d.path)}"><span class="pick-icon">${/^[A-Za-z]:[\\/]?$/.test(d.name) ? '💽' : '📁'}</span>${esc(d.name)}</button>`
+        `<button class="pick-item root" data-enter="${esc(d.path)}"><span class="pick-icon">${/^[A-Za-z]:[\\/]?$/.test(d.name) ? '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="12" r="1.1" fill="currentColor"/><path d="M6.6 9.6h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M3 7.2c0-.9.7-1.6 1.6-1.6h4l1.8 2.1h7.9c.9 0 1.6.7 1.6 1.6v7.5c0 .9-.7 1.6-1.6 1.6H4.6c-.9 0-1.6-.7-1.6-1.6V7.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'}</span>${esc(d.name)}</button>`
       ).join('') || '<div class="pick-empty">没有可用的根目录</div>';
       return;
     }
 
     pathEl.textContent = r.path;
     pathEl.title = r.path;
-    $('#pick-up').disabled = !r.parent;
+    $('#pick-up').disabled = false; // 根目录也能点，回到「选择位置」
     if (!r.dirs || !r.dirs.length) {
       list.innerHTML = '<div class="pick-empty">（没有子目录）</div>';
     } else {
       list.innerHTML = r.dirs.map((d) =>
-        `<button class="pick-item" data-enter="${esc(d.path)}"><span class="pick-icon">📁</span>${esc(d.name)}</button>`
+        `<button class="pick-item" data-enter="${esc(d.path)}"><span class="pick-icon"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M3 7.2c0-.9.7-1.6 1.6-1.6h4l1.8 2.1h7.9c.9 0 1.6.7 1.6 1.6v7.5c0 .9-.7 1.6-1.6 1.6H4.6c-.9 0-1.6-.7-1.6-1.6V7.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>${esc(d.name)}</button>`
       ).join('');
     }
   } catch (err) {
@@ -2562,7 +2570,11 @@ function initNewSession() {
   $('#new-cancel').addEventListener('click', () => dlg.close('cancel'));
   $('#new-ok').addEventListener('click', () => dlg.close('ok'));
 
-  $('#pick-up').addEventListener('click', () => { if (PICK.parent) browseDir(PICK.parent); });
+  $('#pick-up').addEventListener('click', () => {
+    // 已经在「选择位置」这一层就不用再往上
+    if (!PICK.path) return;
+    browseDir(PICK.parent || '');
+  });
   $('#pick-quick').addEventListener('click', (e) => {
     const b = e.target.closest('[data-pick]');
     if (b) browseDir(b.dataset.pick);

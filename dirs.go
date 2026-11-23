@@ -14,25 +14,17 @@ type dirEntry struct {
 	Path string `json:"path"`
 }
 
-// rootDirs 返回该平台的起始位置：Windows 是各盘符，WSL 下额外给出 /mnt/c 这类挂载点
+// rootDirs 返回该平台的起始位置：Windows 是各盘符；Linux 只有一个 /，
+// 前端会直接展开它，不显示中间这一层。
 func rootDirs() []dirEntry {
-	if runtime.GOOS == "windows" {
-		out := make([]dirEntry, 0, 4)
-		for c := 'A'; c <= 'Z'; c++ {
-			p := string(c) + ":\\"
-			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-				out = append(out, dirEntry{Name: string(c) + ":", Path: p})
-			}
-		}
-		return out
+	if runtime.GOOS != "windows" {
+		return nil // Linux 直接展开 /，不需要额外的根列表
 	}
-	out := []dirEntry{{Name: "/", Path: "/"}}
-	if isWSL() {
-		for c := 'c'; c <= 'z'; c++ {
-			p := "/mnt/" + string(c)
-			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-				out = append(out, dirEntry{Name: "/mnt/" + string(c), Path: p})
-			}
+	out := make([]dirEntry, 0, 4)
+	for c := 'A'; c <= 'Z'; c++ {
+		p := string(c) + ":\\"
+		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+			out = append(out, dirEntry{Name: string(c) + ":", Path: p})
 		}
 	}
 	return out
@@ -43,9 +35,12 @@ func rootDirs() []dirEntry {
 func (s *Server) handleDirs(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p == "" {
-		// 空路径 = 展示该系统的"根"：Windows 是盘符列表，WSL/Linux 是 /
-		writeJSON(w, 200, map[string]any{"path": "", "parent": "", "roots": rootDirs(), "home": userHome()})
-		return
+		// Windows 先列盘符；Linux/WSL 直接展开 /
+		if runtime.GOOS == "windows" {
+			writeJSON(w, 200, map[string]any{"path": "", "parent": "", "roots": rootDirs(), "home": userHome()})
+			return
+		}
+		p = "/"
 	}
 	p = filepath.Clean(p)
 	if !filepath.IsAbs(p) {

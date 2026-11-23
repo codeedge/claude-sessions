@@ -2556,7 +2556,7 @@ async function browseDir(path) {
 
     pathEl.textContent = r.path;
     pathEl.title = r.path;
-    $('#pick-up').disabled = false; // 根目录也能点，回到「选择位置」
+    $('#pick-up').disabled = !r.parent && !(r.roots || []).length;
     if (!r.dirs || !r.dirs.length) {
       list.innerHTML = '<div class="pick-empty">（没有子目录）</div>';
     } else {
@@ -2585,9 +2585,8 @@ function initNewSession() {
   $('#new-ok').addEventListener('click', () => dlg.close('ok'));
 
   $('#pick-up').addEventListener('click', () => {
-    // 已经在「选择位置」这一层就不用再往上
     if (!PICK.path) return;
-    browseDir(PICK.parent || '');
+    browseDir(PICK.parent || ''); // 到顶时 Windows 回到盘符列表，Linux 停在 /
   });
   $('#pick-quick').addEventListener('click', (e) => {
     const b = e.target.closest('[data-pick]');

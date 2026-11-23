@@ -830,7 +830,7 @@ dialog {
   max-width: 420px; width: 90vw;
   box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
-dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
+dialog::backdrop { background: rgba(0, 0, 0, .62); }
 dialog h2 { margin: 0 0 8px; font-size: 15px; }
 dialog p { margin: 0 0 18px; color: var(--fg-dim); font-size: 13px; white-space: pre-wrap; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -944,3 +944,14 @@ dialog.dialog.wide { width: min(720px, 92vw); }
 .pick-icon { display: inline-flex; align-items: center; color: var(--fg-faint); }
 .pick-item:hover .pick-icon { color: var(--accent); }
 .pick-empty { padding: 20px; text-align: center; color: var(--fg-faint); font-size: 12.5px; }
+
+/* 弹窗打开时关掉背景元素的模糊：整页重绘时 blur 很吃 CPU */
+body:has(dialog[open]) .topbar,
+body:has(dialog[open]) .composer,
+body:has(dialog[open]) .hovercard,
+body:has(dialog[open]) .jump-nav button,
+body:has(dialog[open]) .badge.live {
+  backdrop-filter: none !important;
+}
+/* 目录列表滚动时避免触发整页重排 */
+.pick-list { contain: content; overscroll-behavior: contain; }

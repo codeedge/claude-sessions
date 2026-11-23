@@ -2281,6 +2281,7 @@ async function loadSettings() {
     DEFAULTS.effort = r.effort || '';
     DEFAULTS.permissionMode = r.permissionMode || '';
     DEFAULTS.cli = r.cli || {};
+    DEFAULTS.cliRaw = r.cliRaw || {};
     DEFAULTS.overrides = r.overrides || {};
     applyDefaultsToComposer();
   } catch {}
@@ -2303,8 +2304,16 @@ function initSettings() {
     $('#set-effort').value = DEFAULTS.overrides.effort || '';
     $('#set-mode').value = DEFAULTS.overrides.permissionMode || '';
 
-    $('#set-model-src').textContent = DEFAULTS.cli.model ? `（CLI: ${DEFAULTS.cli.model}）` : '';
-    $('#set-effort-src').textContent = DEFAULTS.cli.effort ? `（CLI: ${DEFAULTS.cli.effort}）` : '';
+    const rawM = DEFAULTS.cliRaw.model;
+    const shownM = DEFAULTS.cli.model;
+    $('#set-model-src').textContent = shownM
+      ? (rawM && rawM !== shownM ? `（CLI: ${rawM} → ${shownM}）` : `（CLI: ${shownM}）`)
+      : '';
+    const rawE = DEFAULTS.cliRaw.effort;
+    const shownE = DEFAULTS.cli.effort;
+    $('#set-effort-src').textContent = shownE
+      ? (rawE ? `（CLI: ${rawE}）` : `（CLI: ${shownE}）`)
+      : '';
     $('#set-mode-src').textContent = DEFAULTS.cli.permissionMode ? `（CLI: ${DEFAULTS.cli.permissionMode}）` : '';
 
     dlg.returnValue = '';
@@ -2340,6 +2349,7 @@ async function sendChat() {
   const ta = $('#c-input');
   const text = ta.value.trim();
   if (!text || !S.detailId) return;
+  syncStatusFromComposer();
 
   const d = S.detail || {};
   ta.value = '';
@@ -2382,6 +2392,35 @@ async function stopChat() {
   }
 }
 
+// 输入区上方的状态条：模型 / 强度 / 权限 / 本轮用量
+function modeLabel(v) {
+  return { ask: '每次询问权限', default: '默认权限', acceptEdits: '自动接受编辑', plan: '只读（规划）', bypassPermissions: '跳过全部权限' }[v] || v || '默认权限';
+}
+function effortLabel(v) {
+  const hit = EFFORT_LEVELS.find(([k]) => k === v);
+  return hit ? hit[1] : (v || '默认');
+}
+
+function renderChatStatus() {
+  const el = $('#chat-status');
+  if (!el) return;
+  const parts = [];
+  if (CHAT.model) parts.push(`<span class="cs-model">${esc(CHAT.model)}</span>`);
+  const effort = CHAT.effort || '';
+  if (effort) parts.push(`强度 <b>${esc(effortLabel(effort))}</b>`);
+  if (CHAT.mode) parts.push(esc(modeLabel(CHAT.mode)));
+  if (CHAT.turn) {
+    const t = CHAT.turn;
+    parts.push(`本轮 <b>${fmtNum(t.in)}</b> in / <b>${fmtNum(t.out)}</b> out`);
+    if (t.sec) parts.push(`${t.sec.toFixed(1)}s`);
+    if (t.cost) parts.push(`$${t.cost.toFixed(4)}`);
+    const limit = (S.detail && S.detail.contextLimit) || 0;
+    if (limit && t.in) parts.push(`上下文 ${Math.round((t.in / limit) * 100)}%`);
+  }
+  el.innerHTML = parts.join(' · ');
+  el.hidden = !parts.length;
+}
+
 // 正在回答时，标签页标题转起来（切到别的标签也能看到）
 const TAB_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 let tabTimer = null;
@@ -2405,6 +2444,18 @@ function stopTabActivity() {
 }
 
 // 起一个「正在回答」的临时块，接在最后一轮后面
+function syncStatusFromComposer() {
+  CHAT.effort = $('#c-effort').value;
+  CHAT.mode = $('#c-mode').value;
+  if (!$('#c-model').value) {
+    CHAT.model = DEFAULTS.model || '';
+  } else {
+    CHAT.model = $('#c-model').value;
+  }
+  CHAT.turn = null;
+  renderChatStatus();
+}
+
 function startLiveBubble(userText) {
   const box = $('#conv');
   const wrap = document.createElement('article');
@@ -2479,6 +2530,13 @@ function handleChatLine(line) {
     return;
   }
 
+  if (ev.type === 'system' && ev.subtype === 'init') {
+    if (ev.model) CHAT.model = ev.model;
+    if (ev.permissionMode) CHAT.mode = ev.permissionMode;
+    renderChatStatus();
+    return;
+  }
+
   if (ev.type === 'stream_event') {
     const e = ev.event || {};
     if (e.type === 'content_block_start') {
@@ -2503,6 +2561,14 @@ function handleChatLine(line) {
   }
 
   if (ev.type === 'result') {
+    const u = ev.usage || {};
+    CHAT.turn = {
+      in: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+      out: u.output_tokens || 0,
+      sec: (ev.duration_ms || 0) / 1000,
+      cost: ev.total_cost_usd || 0,
+    };
+    renderChatStatus();
     // 一轮结束：会话文件已更新，让详情页落到最新
     if (ev.is_error) liveAppend(`<div class="live-err">${esc(ev.result || '出错了')}</div>`);
     const id = S.detailId;
@@ -2713,6 +2779,10 @@ function initPermissionDialog() {
 function startChatStream(id) {
   stopChatStream();
   CHAT.id = id;
+  CHAT.model = '';
+  CHAT.turn = null;
+  CHAT.effort = '';
+  syncStatusFromComposer();
   const es = new EventSource(`/api/chat/stream/${encodeURIComponent(id)}`);
   CHAT.es = es;
   es.addEventListener('state', (e) => {

@@ -527,10 +527,13 @@ function renderProjects() {
     </button>`];
 
   for (const p of S.projects) {
-    rows.push(`<button class="proj" data-project="${esc(p.path)}" title="${esc(p.path)}" aria-current="${!S.starOnly && S.project === p.path}">
-      <span class="proj-name">${esc(projLabel(p.path))}</span>
-      <span class="proj-n">${p.count}</span>
-    </button>`);
+    rows.push(`<div class="proj-row">
+      <button class="proj" data-project="${esc(p.path)}" title="${esc(p.path)}" aria-current="${!S.starOnly && S.project === p.path}">
+        <span class="proj-name">${esc(projLabel(p.path))}</span>
+        <span class="proj-n">${p.count}</span>
+      </button>
+      <button class="proj-new" data-new-in="${esc(p.path)}" title="在 ${esc(p.path)} 里新建会话">＋</button>
+    </div>`);
   }
 
   $('#projects').innerHTML = rows.join('');
@@ -2294,6 +2297,28 @@ async function stopChat() {
   }
 }
 
+// 正在回答时，标签页标题转起来（切到别的标签也能看到）
+const TAB_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let tabTimer = null;
+let tabFrame = 0;
+let tabBase = '';
+
+function startTabActivity() {
+  if (tabTimer) return;
+  tabBase = document.title.replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏●]\s*/, '');
+  tabTimer = setInterval(() => {
+    tabFrame = (tabFrame + 1) % TAB_FRAMES.length;
+    document.title = TAB_FRAMES[tabFrame] + ' ' + tabBase;
+  }, 260);
+}
+
+function stopTabActivity() {
+  if (!tabTimer) return;
+  clearInterval(tabTimer);
+  tabTimer = null;
+  document.title = tabBase || 'Claude Code 会话';
+}
+
 // 起一个「正在回答」的临时块，接在最后一轮后面
 function startLiveBubble(userText) {
   const box = $('#conv');
@@ -2352,6 +2377,7 @@ function handleChatLine(line) {
   }
   if (ev.type === 'ui_started') {
     $('#c-stop').hidden = false;
+    startTabActivity();
     return;
   }
   if (ev.type === 'ui_stderr') {
@@ -2360,6 +2386,7 @@ function handleChatLine(line) {
   }
   if (ev.type === 'ui_exit') {
     $('#c-stop').hidden = true;
+    stopTabActivity();
     if (CHAT.live && CHAT.live.thinkEl) {
       CHAT.live.thinkEl.closest('details').open = false;
     }
@@ -2458,15 +2485,24 @@ async function answerPermission(allow) {
   }
 }
 
+function openNewDialog(cwd) {
+  const dlg = $('#new-dialog');
+  $('#new-cwd').value = cwd || localStorage.getItem('lastCwd') || (S.items.find((i) => i.cwd) || {}).cwd || '';
+  dlg.returnValue = '';
+  dlg.showModal();
+  $('#new-cwd').focus();
+}
+
 function initNewSession() {
   const dlg = $('#new-dialog');
-  $('#new-session').addEventListener('click', () => {
-    const last = S.items.find((i) => i.cwd) || {};
-    $('#new-cwd').value = localStorage.getItem('lastCwd') || last.cwd || '';
-    dlg.returnValue = '';
-    dlg.showModal();
-    $('#new-cwd').focus();
+  $('#new-session-top').addEventListener('click', () => openNewDialog(''));
+  $('#projects').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-new-in]');
+    if (!btn) return;
+    e.stopPropagation();
+    startNewSession(btn.dataset.newIn);
   });
+
   $('#new-cancel').addEventListener('click', () => dlg.close('cancel'));
   $('#new-ok').addEventListener('click', () => dlg.close('ok'));
   dlg.addEventListener('close', () => {
@@ -2523,6 +2559,7 @@ function startChatStream(id) {
     try {
       const st = JSON.parse(e.data);
       $('#c-stop').hidden = !st.running;
+      if (st.running) startTabActivity(); else stopTabActivity();
     } catch {}
   });
   es.onmessage = (e) => handleChatLine(e.data);
@@ -2530,6 +2567,7 @@ function startChatStream(id) {
 }
 
 function stopChatStream() {
+  stopTabActivity();
   if (CHAT.es) {
     CHAT.es.close();
     CHAT.es = null;

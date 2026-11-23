@@ -889,3 +889,25 @@ dialog p { margin: 0 0 18px; color: var(--fg-dim); font-size: 13px; white-space:
   border: 1px solid var(--line-soft);
   font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-all;
 }
+
+/* 侧栏的「新建会话」入口 */
+.side-new {
+  margin-left: auto; width: 20px; height: 20px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-2); color: var(--fg-dim);
+  font-size: 13px; cursor: pointer;
+}
+.side-new:hover { color: var(--accent); border-color: var(--accent); }
+.proj-row { display: flex; align-items: center; gap: 2px; }
+.proj-row .proj { flex: 1; min-width: 0; }
+.proj-new {
+  flex: none; width: 20px; height: 20px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: 1px solid transparent;
+  background: none; color: var(--fg-faint);
+  font-size: 13px; cursor: pointer; opacity: .45;
+  transition: opacity .12s;
+}
+.proj-row:hover .proj-new { opacity: 1; }
+.proj-new:hover { color: var(--accent); border-color: var(--line); background: var(--bg-2); }

@@ -401,10 +401,11 @@ function init() {
   });
   // 点灯箱里任何位置（图片本身或空白）都关闭
   $('#img-viewer').addEventListener('click', () => closeImageViewer());
-  $('#subagent-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-agent]');
-    if (btn) openDetail(S.detailId, btn.dataset.agent, 0);
+  $('#panel-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-panel]');
+    if (btn) togglePanel(btn.dataset.panel, btn);
   });
+  $('#panel-close').addEventListener('click', closePanel);
   $('#d-meta').addEventListener('click', (e) => {
     const agentBtn = e.target.closest('.subagent-btn');
     if (agentBtn) {
@@ -421,7 +422,7 @@ function init() {
     if (btn) openDetail(btn.dataset.openSession);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeImageViewer();
+    if (e.key === 'Escape') { closeImageViewer(); closePanel(); }
   });
   $('#jump-top').addEventListener('click', () => $('#main').scrollTo({ top: 0, behavior: 'smooth' }));
   $('#jump-bottom').addEventListener('click', () => {
@@ -1333,6 +1334,7 @@ function closeDetail() {
   stopChatStream();
   stopHUD();
   stopAgeTimer();
+  closePanel();
   S.detailId = null;
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -1349,7 +1351,7 @@ function renderDetail() {
   $('#d-sub').textContent = (d.cwd || d.project || '') + (d.branch ? '  ·  ' + d.branch : '');
 
   renderBranchBanner();
-  renderSubagentList();
+  renderPanelTabs();
   renderChatStatus();
   $('#composer').hidden = !!d.subagent;
   const backMain = $('#d-back-main');
@@ -1477,24 +1479,96 @@ async function refreshTail() {
   updateJumpNav();
 }
 
-// 左侧列出这条会话派生的子代理，点一下切过去看它的对话
-function renderSubagentList() {
-  const d = S.detail;
-  const box = $('#subagent-block');
-  const list = $('#subagent-list');
-  if (!box || !list) return;
-  const subs = (d && !d.subagent && d.subagents) || [];
-  if (!subs.length) {
+// 会话底部列出子代理和后台 shell，点一下在右侧抽屉里看内容，再点关闭
+const PANEL = { open: null };
+
+function renderPanelTabs() {
+  const d = S.detail || {};
+  const box = $('#panel-tabs');
+  if (!box) return;
+  const subs = (d.subagent ? [] : (d.subagents || []));
+  const shells = (d.subagent ? [] : (d.shells || []));
+  if (!subs.length && !shells.length) {
     box.hidden = true;
-    list.innerHTML = '';
+    box.innerHTML = '';
     return;
   }
   box.hidden = false;
-  list.innerHTML = subs.map((a) => `<button class="subagent-item" data-agent="${esc(a.id)}" title="${esc(a.description || a.id)}">
-      <span class="sa-type">${esc(a.agentType || 'subagent')}</span>
-      <span class="sa-desc">${esc(truncate(a.description || a.id, 60))}</span>
-      <span class="sa-n">${a.msgs}</span>
-    </button>`).join('');
+  const chips = [];
+  for (const a of subs) {
+    chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc(a.description || '')}">
+        <span class="pc-kind">子代理</span>
+        <span class="pc-name">${esc(a.agentType || 'agent')}</span>
+        <span class="pc-n">${a.msgs}</span>
+      </button>`);
+  }
+  for (const sh of shells) {
+    chips.push(`<button class="panel-chip shell" data-panel="shell:${esc(sh.id)}" title="${esc(sh.command || '')}">
+        <span class="pc-kind">shell</span>
+        <span class="pc-name">${esc(truncate(sh.description || sh.command || sh.id, 28))}</span>
+        <span class="pc-n">${sh.status === 'done' ? '已结束' : '后台'}</span>
+      </button>`);
+  }
+  box.innerHTML = chips.join('');
+  // 保持打开状态高亮
+  if (PANEL.open) {
+    const btn = box.querySelector(`[data-panel="${CSS.escape(PANEL.open)}"]`);
+    if (btn) btn.classList.add('on');
+    else closePanel();
+  }
+}
+
+function closePanel() {
+  PANEL.open = null;
+  const p = $('#side-panel');
+  if (p) p.hidden = true;
+  document.querySelectorAll('.panel-chip.on').forEach((el) => el.classList.remove('on'));
+}
+
+async function togglePanel(key, btn) {
+  if (PANEL.open === key) {
+    closePanel();
+    return;
+  }
+  PANEL.open = key;
+  document.querySelectorAll('.panel-chip.on').forEach((el) => el.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+
+  const panel = $('#side-panel');
+  const body = $('#panel-body');
+  const title = $('#panel-title');
+  panel.hidden = false;
+  body.innerHTML = '<div class="pick-empty">加载中…</div>';
+
+  const [kind, id] = key.split(':');
+  const d = S.detail || {};
+
+  if (kind === 'shell') {
+    const sh = (d.shells || []).find((x) => x.id === id);
+    if (!sh) { body.innerHTML = '<div class="pick-empty">找不到这条 shell</div>'; return; }
+    title.textContent = sh.status === 'done' ? '后台 shell（已结束）' : '后台 shell';
+    body.innerHTML = `
+      <div class="panel-sec">
+        <div class="panel-label">命令</div>
+        <pre class="panel-pre">${esc(sh.command || '')}</pre>
+      </div>
+      <div class="panel-sec">
+        <div class="panel-label">输出</div>
+        <pre class="panel-pre">${esc(sh.output || '（暂无输出）')}</pre>
+      </div>`;
+    return;
+  }
+
+  // 子代理：取它的对话渲染
+  title.textContent = '子代理';
+  try {
+    const r = await api(`/api/sessions/${encodeURIComponent(d.id)}?agent=${encodeURIComponent(id)}&from=0&count=200`);
+    const turns = r.turns || [];
+    title.textContent = `子代理 · ${r.agentType || ''} · ${r.totalTurns || turns.length} 轮`;
+    body.innerHTML = turns.map((t) => turnHTML(t)).join('') || '<div class="pick-empty">这个子代理没有内容</div>';
+  } catch (err) {
+    body.innerHTML = `<div class="pick-empty">${esc(err.message)}</div>`;
+  }
 }
 
 // 顶部状态行：直接跑 Claude Code 的 statusLine 命令（这台机器上是 OMC 的 HUD），

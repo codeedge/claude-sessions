@@ -121,16 +121,13 @@
 
       <div class="detail-body">
         <aside class="outline" id="outline">
-          <div class="subagent-block" id="subagent-block" hidden>
-            <div class="outline-head">子代理</div>
-            <nav class="subagent-list" id="subagent-list"></nav>
-          </div>
           <div class="outline-head">会话大纲</div>
           <nav id="outline-list" class="outline-list"></nav>
         </aside>
         <div class="conv-col">
           <div class="conv" id="conv"></div>
 
+          <div class="panel-tabs" id="panel-tabs" hidden></div>
           <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
           <div class="composer" id="composer">
         <div class="chat-status" id="chat-status"></div>
@@ -153,6 +150,14 @@
           </div>
         </div>
       </div>
+
+      <aside class="side-panel" id="side-panel" hidden>
+        <header class="side-panel-head">
+          <span id="panel-title">详情</span>
+          <button class="icon-btn" id="panel-close" title="关闭">✕</button>
+        </header>
+        <div class="side-panel-body" id="panel-body"></div>
+      </aside>
 
       <div class="jump-nav" id="jump-nav" hidden>
         <button class="jump-btn" id="jump-top" type="button" title="回到顶部">↑</button>

@@ -119,14 +119,24 @@ type Hit struct {
 // SessionDetail is returned when opening a conversation.
 type SessionDetail struct {
 	SessionInfo
-	Starred    bool     `json:"starred,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	Note       string   `json:"note,omitempty"`
-	Turns      []Turn   `json:"turns"`
-	TotalTurns int      `json:"totalTurns"`
-	From       int      `json:"from"`
-	Subagent   bool     `json:"subagent,omitempty"`
-	AgentType  string   `json:"agentType,omitempty"`
+	Starred    bool        `json:"starred,omitempty"`
+	Tags       []string    `json:"tags,omitempty"`
+	Note       string      `json:"note,omitempty"`
+	Turns      []Turn      `json:"turns"`
+	Shells     []ShellInfo `json:"shells,omitempty"`
+	TotalTurns int         `json:"totalTurns"`
+	From       int         `json:"from"`
+	Subagent   bool        `json:"subagent,omitempty"`
+	AgentType  string      `json:"agentType,omitempty"`
+}
+
+// ShellInfo 描述一条后台运行的 shell（Bash 的 run_in_background）
+type ShellInfo struct {
+	ID          string `json:"id"`
+	Command     string `json:"command"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"` // running | done | unknown
+	Output      string `json:"output,omitempty"`
 }
 
 // TrashEntry describes a soft-deleted session.

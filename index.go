@@ -859,6 +859,9 @@ func (ix *Index) Detail(sessionID, agentID string, from, count int) (*SessionDet
 	}
 
 	d := &SessionDetail{SessionInfo: *info, TotalTurns: len(turns), From: from, Subagent: sub, AgentType: agentType}
+	if !sub {
+		d.Shells = collectShells(turns)
+	}
 	if from < 0 {
 		// 负数表示从末尾往前数：from=-5 即最后 5 轮
 		from = len(turns) + from

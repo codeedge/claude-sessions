@@ -901,3 +901,63 @@ func asciiLower(s string) string {
 	}
 	return string(b)
 }
+
+// collectShells 找出会话里的后台 shell（Bash + run_in_background），
+// 并把后续 BashOutput/结束信息拼进输出里，供网页右侧面板查看。
+func collectShells(turns []Turn) []ShellInfo {
+	type shellState struct {
+		info ShellInfo
+		seen bool
+	}
+	order := []string{}
+	byID := map[string]*shellState{}
+
+	for _, t := range turns {
+		for _, m := range t.Messages {
+			for _, b := range m.Blocks {
+				if b.Kind == "tool_use" && b.Name == "Bash" {
+					var in struct {
+						Command         string `json:"command"`
+						Description     string `json:"description"`
+						RunInBackground bool   `json:"run_in_background"`
+					}
+					if len(b.Input) > 0 && json.Unmarshal(b.Input, &in) == nil && in.RunInBackground {
+						if _, ok := byID[b.ToolUseID]; !ok {
+							byID[b.ToolUseID] = &shellState{info: ShellInfo{
+								ID:          b.ToolUseID,
+								Command:     in.Command,
+								Description: in.Description,
+								Status:      "running",
+							}}
+							order = append(order, b.ToolUseID)
+						}
+					}
+				}
+				if b.Kind == "tool_result" {
+					if st, ok := byID[b.ToolUseID]; ok {
+						txt := strings.TrimSpace(b.Text)
+						if txt != "" {
+							if st.info.Output != "" {
+								st.info.Output += "\n"
+							}
+							st.info.Output += txt
+						}
+						if b.IsError || strings.Contains(txt, "exit code") || strings.Contains(txt, "completed") {
+							st.info.Status = "done"
+						}
+					}
+				}
+			}
+		}
+	}
+
+	out := make([]ShellInfo, 0, len(order))
+	for _, id := range order {
+		st := byID[id]
+		if len([]rune(st.info.Output)) > 4000 {
+			st.info.Output = string([]rune(st.info.Output)[:4000]) + "…"
+		}
+		out = append(out, st.info)
+	}
+	return out
+}

@@ -2494,7 +2494,7 @@ function openNewDialog(cwd) {
   dlg.returnValue = '';
   renderQuickPicks();
   dlg.showModal();
-  browseDir(cwd || localStorage.getItem('lastCwd') || '');
+  browseDir(cwd || '');
 }
 
 function renderQuickPicks() {
@@ -2519,6 +2519,19 @@ async function browseDir(path) {
     const r = await api('/api/fs/dirs?path=' + encodeURIComponent(path || ''));
     PICK.path = r.path;
     PICK.parent = r.parent;
+
+    if (!r.path) {
+      // 没选具体路径：展示该系统的根（Windows 盘符 / WSL 的 / 和 /mnt/*）
+      pathEl.textContent = '选择位置';
+      pathEl.title = '';
+      $('#pick-up').disabled = true;
+      PICK.path = '';
+      list.innerHTML = (r.roots || []).map((d) =>
+        `<button class="pick-item root" data-enter="${esc(d.path)}"><span class="pick-icon">${/^[A-Za-z]:[\\/]?$/.test(d.name) ? '💽' : '📁'}</span>${esc(d.name)}</button>`
+      ).join('') || '<div class="pick-empty">没有可用的根目录</div>';
+      return;
+    }
+
     pathEl.textContent = r.path;
     pathEl.title = r.path;
     $('#pick-up').disabled = !r.parent;

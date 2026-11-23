@@ -89,6 +89,7 @@
             <input id="conv-search" type="search" placeholder="在会话内搜索…" autocomplete="off" spellcheck="false">
             <span class="conv-search-count" id="conv-search-count"></span>
           </div>
+          <button class="btn ghost" id="d-back-main" hidden title="回到主会话">← 主会话</button>
           <button class="icon-btn" id="d-rename" type="button" title="重命名（只改显示名，不动会话文件）">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
           <path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
@@ -115,6 +116,10 @@
 
       <div class="detail-body">
         <aside class="outline" id="outline">
+          <div class="subagent-block" id="subagent-block" hidden>
+            <div class="outline-head">子代理</div>
+            <nav class="subagent-list" id="subagent-list"></nav>
+          </div>
           <div class="outline-head">会话大纲</div>
           <nav id="outline-list" class="outline-list"></nav>
         </aside>

@@ -401,6 +401,17 @@ function init() {
   });
   // 点灯箱里任何位置（图片本身或空白）都关闭
   $('#img-viewer').addEventListener('click', () => closeImageViewer());
+  $('#subagent-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-agent]');
+    if (btn) openDetail(S.detailId, btn.dataset.agent, 0);
+  });
+  $('#d-meta').addEventListener('click', (e) => {
+    const agentBtn = e.target.closest('.subagent-btn');
+    if (agentBtn) {
+      openDetail(S.detailId, agentBtn.dataset.agent, 0);
+      return;
+    }
+  });
   $('#d-branch').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-open-session]');
     if (btn) openDetail(btn.dataset.openSession);
@@ -1334,7 +1345,13 @@ function renderDetail() {
   $('#d-sub').textContent = (d.cwd || d.project || '') + (d.branch ? '  ·  ' + d.branch : '');
 
   renderBranchBanner();
+  renderSubagentList();
   $('#composer').hidden = !!d.subagent;
+  const backMain = $('#d-back-main');
+  if (backMain) {
+    backMain.hidden = !d.subagent;
+    backMain.onclick = () => openDetail(d.id, null, 0);
+  }
 
   const bits = [
     ['会话 ID', d.subagent ? `${d.id} / ${d.agentType}` : d.id],
@@ -1456,6 +1473,26 @@ async function refreshTail() {
   else main.scrollTop = keep;
   syncDetailToggle();
   updateJumpNav();
+}
+
+// 左侧列出这条会话派生的子代理，点一下切过去看它的对话
+function renderSubagentList() {
+  const d = S.detail;
+  const box = $('#subagent-block');
+  const list = $('#subagent-list');
+  if (!box || !list) return;
+  const subs = (d && !d.subagent && d.subagents) || [];
+  if (!subs.length) {
+    box.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+  box.hidden = false;
+  list.innerHTML = subs.map((a) => `<button class="subagent-item" data-agent="${esc(a.id)}" title="${esc(a.description || a.id)}">
+      <span class="sa-type">${esc(a.agentType || 'subagent')}</span>
+      <span class="sa-desc">${esc(truncate(a.description || a.id, 60))}</span>
+      <span class="sa-n">${a.msgs}</span>
+    </button>`).join('');
 }
 
 // 详情页顶部的分支提示：标明自己是分支，或标明自己有几个分支

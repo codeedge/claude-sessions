@@ -1316,6 +1316,7 @@ async function openDetail(id, agent = null, turn = 0) {
     renderDetail();
     startLiveWatch(id);
     startChatStream(id);
+    startHUD(id);
     loadChatModels();
     // 默认停在最底部（最新一轮），除非明确指定了要跳的轮次
     if (turn) await jumpToTurn(turn, false);
@@ -1329,6 +1330,7 @@ function closeDetail() {
   if (document.body.dataset.view !== 'detail') return;
   stopLiveWatch();
   stopChatStream();
+  stopHUD();
   S.detailId = null;
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -1493,6 +1495,44 @@ function renderSubagentList() {
       <span class="sa-desc">${esc(truncate(a.description || a.id, 60))}</span>
       <span class="sa-n">${a.msgs}</span>
     </button>`).join('');
+}
+
+// 顶部状态行：直接跑 Claude Code 的 statusLine 命令（这台机器上是 OMC 的 HUD），
+// 所以模型、版本、更新提示、上下文占用都和终端里一模一样
+let hudTimer = null;
+async function loadHUD(id) {
+  const box = $('#hud');
+  if (!box) return;
+  try {
+    const r = await api(`/api/sessions/${encodeURIComponent(id)}/hud`);
+    if (!r.enabled || !r.html) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = r.html;
+  } catch {
+    box.hidden = true;
+  }
+}
+
+function startHUD(id) {
+  stopHUD();
+  loadHUD(id);
+  hudTimer = setInterval(() => {
+    if (document.body.dataset.view === 'detail' && S.detailId === id) loadHUD(id);
+    else stopHUD();
+  }, 20000);
+}
+
+function stopHUD() {
+  if (hudTimer) {
+    clearInterval(hudTimer);
+    hudTimer = null;
+  }
+  const box = $('#hud');
+  if (box) box.hidden = true;
 }
 
 // 详情页顶部的分支提示：标明自己是分支，或标明自己有几个分支
@@ -2594,6 +2634,7 @@ function handleChatLine(line) {
     if (ev.is_error) liveAppend(`<div class="live-err">${esc(ev.result || '出错了')}</div>`);
     const id = S.detailId;
     setTimeout(async () => {
+      loadHUD(id);
       if (!id || S.detailId !== id) return;
       try {
         await refreshTail();

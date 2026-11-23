@@ -68,6 +68,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
 	s.mux.HandleFunc("GET /api/chat/models", s.handleChatModels)
 	s.mux.HandleFunc("GET /api/fs/dirs", s.handleDirs)
+	s.mux.HandleFunc("GET /api/sessions/{id}/hud", s.handleHUD)
 	s.mux.HandleFunc("GET /api/settings", s.handleSettings)
 	s.mux.HandleFunc("POST /api/settings", s.handleSaveSettings)
 	s.mux.HandleFunc("POST /api/chat/send", s.handleChatSend)

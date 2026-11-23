@@ -89,6 +89,8 @@ claude-sessions scan                 # 只扫描并打印统计
   ③ 两个会话首条消息 uuid 完全相同，创建早的是源头（老版本没写 forkedFrom 时的兜底）
 - **默认设置**（侧栏左下角）：默认模型 / 思考强度 / 权限模式，没设的项自动跟随 Claude CLI 的 `~/.claude/settings.json`；
   模型别名会解析成真实模型（比如 `sonnet` → `deepseek-v4.1-flash[1M]`），强度取 `CLAUDE_CODE_EFFORT_LEVEL`
+- **顶部 HUD**：直接执行 Claude Code 的 `statusLine` 命令（这台机器上是 OMC 的 HUD），
+  把输出转成 HTML 显示，所以 OMC 版本、Claude 版本与更新提示、模型、effort、上下文占用、token 都和终端一致
 - **对话状态条**：输入区上方实时显示模型、强度、权限模式，以及本轮 in/out token、耗时、花费、上下文占比
 - **在网页里继续对话**：详情页底部有输入框，回车发送；流式输出文字/思考/工具调用，可随时停止
   - 顶部可选模型、思考强度、权限模式；默认值在左下角「设置」里配

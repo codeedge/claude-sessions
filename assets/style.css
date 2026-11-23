@@ -1012,3 +1012,34 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .sa-type { color: var(--branch); font-size: 11px; white-space: nowrap; }
 .sa-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa-n { color: var(--fg-faint); font-variant-numeric: tabular-nums; font-size: 11px; }
+
+/* 顶部状态行（复用 CLI 的 statusLine 输出） */
+.hud {
+  margin: 8px 22px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg-0);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--fg-dim);
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: var(--detail-max);
+}
+.hud[hidden] { display: none !important; }
+.hud .dim { opacity: .62; }
+.hud .b { font-weight: 600; }
+.hud .fg1 { color: #e06c75; }
+.hud .fg2 { color: #98c379; }
+.hud .fg3 { color: #e5c07b; }
+.hud .fg4 { color: #61afef; }
+.hud .fg5 { color: #c678dd; }
+.hud .fg6 { color: #56b6c2; }
+.hud .fg8, .hud .fg9 { color: #e06c75; }
+.hud .fg10, .hud .fg11 { color: #98c379; }
+.hud .fg12 { color: #61afef; }
+.hud .fg13 { color: #c678dd; }
+.hud .fg14 { color: #56b6c2; }
+.hud .fg15 { color: var(--fg); }

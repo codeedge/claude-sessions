@@ -114,7 +114,12 @@
 
       <div class="detail-meta" id="d-meta"></div>
 
-      <div class="hud" id="hud" hidden></div>
+      <div class="chat-status top-status" id="chat-status"></div>
+
+      <details class="hud-wrap" id="hud-wrap" hidden>
+        <summary>终端状态行（OMC HUD）</summary>
+        <div class="hud" id="hud"></div>
+      </details>
 
       <div class="detail-body">
         <aside class="outline" id="outline">
@@ -130,7 +135,6 @@
 
           <div class="load-more-wrap"><button class="btn" id="load-more" hidden>加载更多轮次</button></div>
           <div class="composer" id="composer">
-        <div class="chat-status" id="chat-status"></div>
         <div class="composer-bar">
           <select id="c-model" title="模型"></select>
           <select id="c-effort" title="思考强度"></select>

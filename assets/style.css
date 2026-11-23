@@ -992,8 +992,19 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 
 .chat-status {
   font-size: 11.5px; color: var(--fg-faint); font-family: var(--mono);
-  padding: 0 2px 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  padding: 0 2px 6px; display: flex; flex-direction: column; gap: 3px;
 }
+.chat-status.top-status {
+  margin: 8px auto 0; padding: 0 22px;
+  max-width: var(--detail-max); width: 100%;
+}
+.chat-status .cs-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.chat-status .cs-sep { margin: 0 7px; opacity: .45; }
+.chat-status .cs-path { color: var(--fg-dim); }
+.chat-status .cs-branch { color: var(--branch); }
+.chat-status .cs-ctx.warn { color: var(--warn); }
+.chat-status .cs-ctx.high { color: var(--danger); }
+.chat-status .cs-age { color: var(--fg-dim); }
 .chat-status[hidden] { display: none !important; }
 .chat-status b { color: var(--fg-dim); font-weight: 500; }
 .chat-status .cs-model { color: var(--accent); }
@@ -1014,8 +1025,17 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .sa-n { color: var(--fg-faint); font-variant-numeric: tabular-nums; font-size: 11px; }
 
 /* 顶部状态行（复用 CLI 的 statusLine 输出） */
+.hud-wrap { margin: 6px auto 0; padding: 0 22px; max-width: var(--detail-max); width: 100%; }
+.hud-wrap[hidden] { display: none !important; }
+.hud-wrap > summary {
+  cursor: pointer; font-size: 11px; color: var(--fg-faint);
+  padding: 2px 0; list-style: none;
+}
+.hud-wrap > summary::before { content: '▸ '; }
+.hud-wrap[open] > summary::before { content: '▾ '; }
+.hud-wrap > summary::-webkit-details-marker { display: none; }
 .hud {
-  margin: 8px 22px 0;
+  margin: 4px 0 0;
   padding: 7px 10px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;

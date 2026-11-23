@@ -1317,6 +1317,7 @@ async function openDetail(id, agent = null, turn = 0) {
     startLiveWatch(id);
     startChatStream(id);
     startHUD(id);
+    startAgeTimer();
     loadChatModels();
     // 默认停在最底部（最新一轮），除非明确指定了要跳的轮次
     if (turn) await jumpToTurn(turn, false);
@@ -1331,6 +1332,7 @@ function closeDetail() {
   stopLiveWatch();
   stopChatStream();
   stopHUD();
+  stopAgeTimer();
   S.detailId = null;
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -1348,6 +1350,7 @@ function renderDetail() {
 
   renderBranchBanner();
   renderSubagentList();
+  renderChatStatus();
   $('#composer').hidden = !!d.subagent;
   const backMain = $('#d-back-main');
   if (backMain) {
@@ -1364,9 +1367,6 @@ function renderDetail() {
     ['消息', `${d.userMsgs} 用户 / ${d.asstMsgs} 助手`],
     ['工具调用', String(d.toolCalls)],
     ['Token', `入 ${fmtNum(d.in)} · 出 ${fmtNum(d.out)} · 缓存 ${fmtNum(d.cacheRead)}`],
-    ['上下文', d.contextTokens && d.contextLimit
-      ? `${Math.round((d.contextTokens / d.contextLimit) * 100)}%（${fmtNum(d.contextTokens)} / ${fmtNum(d.contextLimit)}）`
-      : '—'],
     ['文件', fmtBytes(d.size)],
     ['版本', d.version || '—'],
   ];
@@ -1505,13 +1505,15 @@ async function loadHUD(id) {
   if (!box) return;
   try {
     const r = await api(`/api/sessions/${encodeURIComponent(id)}/hud`);
-    if (!r.enabled || !r.html) {
-      box.hidden = true;
+    const wrap = $('#hud-wrap');
+  if (!r.enabled || !r.html) {
+      if (wrap) wrap.hidden = true;
       box.innerHTML = '';
       return;
     }
-    box.hidden = false;
+    if (wrap) wrap.hidden = false;
     box.innerHTML = r.html;
+    box.scrollLeft = 0;
   } catch {
     box.hidden = true;
   }
@@ -1531,8 +1533,8 @@ function stopHUD() {
     clearInterval(hudTimer);
     hudTimer = null;
   }
-  const box = $('#hud');
-  if (box) box.hidden = true;
+  const wrap = $('#hud-wrap');
+  if (wrap) wrap.hidden = true;
 }
 
 // 详情页顶部的分支提示：标明自己是分支，或标明自己有几个分支
@@ -2462,24 +2464,90 @@ function effortLabel(v) {
   return hit ? hit[1] : (v || '默认');
 }
 
+// 输入区上方的状态：目录 · 分支 · 上下文 · 会话时长，以及模型/强度/权限
+function shortPath(p) {
+  if (!p) return '';
+  const home = (S.stats && S.stats.home) || '';
+  let out = p;
+  if (home && p === home) out = '~';
+  else if (home && p.startsWith(home + '/')) out = '~' + p.slice(home.length);
+  const segs = out.split('/');
+  if (segs.length > 4) out = '…/' + segs.slice(-3).join('/');
+  return out;
+}
+
+// 会话时长：刚刚 / 12 分钟 / 1 小时 41 分 / 3 天 4 小时
+function humanSpan(ms) {
+  if (!ms || ms < 0) return '';
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return '刚刚开始';
+  if (min < 60) return `${min} 分钟`;
+  const hours = Math.floor(min / 60);
+  const restMin = min % 60;
+  if (hours < 24) return restMin ? `${hours} 小时 ${restMin} 分` : `${hours} 小时`;
+  const days = Math.floor(hours / 24);
+  const restHour = hours % 24;
+  if (days < 30) return restHour ? `${days} 天 ${restHour} 小时` : `${days} 天`;
+  const months = Math.floor(days / 30);
+  return `${months} 个月`;
+}
+
+function sessionAge() {
+  const d = S.detail;
+  if (!d) return '';
+  const start = d.createdAt ? new Date(d.createdAt).getTime() : 0;
+  if (!start) return '';
+  const end = d.running ? Date.now() : (d.updatedAt ? new Date(d.updatedAt).getTime() : Date.now());
+  return humanSpan(Math.max(0, end - start));
+}
+
 function renderChatStatus() {
   const el = $('#chat-status');
   if (!el) return;
-  const parts = [];
-  if (CHAT.model) parts.push(`<span class="cs-model">${esc(CHAT.model)}</span>`);
-  const effort = CHAT.effort || '';
-  if (effort) parts.push(`强度 <b>${esc(effortLabel(effort))}</b>`);
-  if (CHAT.mode) parts.push(esc(modeLabel(CHAT.mode)));
-  if (CHAT.turn) {
-    const t = CHAT.turn;
-    parts.push(`本轮 <b>${fmtNum(t.in)}</b> in / <b>${fmtNum(t.out)}</b> out`);
-    if (t.sec) parts.push(`${t.sec.toFixed(1)}s`);
-    if (t.cost) parts.push(`$${t.cost.toFixed(4)}`);
-    const limit = (S.detail && S.detail.contextLimit) || 0;
-    if (limit && t.in) parts.push(`上下文 ${Math.round((t.in / limit) * 100)}%`);
+  const d = S.detail || {};
+  const info = [];
+
+  const path = shortPath(d.cwd || d.project || '');
+  if (path) info.push(`<span class="cs-path" title="${esc(d.cwd || '')}">${esc(path)}</span>`);
+  if (d.branch) info.push(`<span class="cs-branch" title="git 分支">${esc(d.branch)}</span>`);
+
+  const limit = d.contextLimit || 0;
+  const used = (CHAT.turn && CHAT.turn.in) || d.contextTokens || 0;
+  if (limit && used) {
+    const pct = Math.min(100, Math.round((used / limit) * 100));
+    const cls = pct >= 90 ? ' high' : pct >= 70 ? ' warn' : '';
+    info.push(`<span class="cs-ctx${cls}" title="上下文占用 ${fmtNum(used)} / ${fmtNum(limit)} tokens">上下文 ${pct}%</span>`);
   }
-  el.innerHTML = parts.join(' · ');
-  el.hidden = !parts.length;
+
+  const age = sessionAge();
+  if (age) info.push(`<span class="cs-age" title="会话开始于 ${esc(abs(d.createdAt))}">${esc(age)}</span>`);
+
+  const model = [];
+  if (CHAT.model) model.push(`<span class="cs-model">${esc(CHAT.model)}</span>`);
+  if (CHAT.effort) model.push(`强度 <b>${esc(effortLabel(CHAT.effort))}</b>`);
+  if (CHAT.mode) model.push(esc(modeLabel(CHAT.mode)));
+  if (CHAT.turn && CHAT.turn.out) model.push(`本轮 <b>${fmtNum(CHAT.turn.in)}</b> in / <b>${fmtNum(CHAT.turn.out)}</b> out`);
+  if (CHAT.turn && CHAT.turn.sec) model.push(`${CHAT.turn.sec.toFixed(1)}s`);
+  if (CHAT.turn && CHAT.turn.cost) model.push(`$${CHAT.turn.cost.toFixed(4)}`);
+
+  const row1 = info.join('<span class="cs-sep">·</span>');
+  const row2 = model.join('<span class="cs-sep">·</span>');
+  el.innerHTML = [row1, row2].filter(Boolean).map((r) => `<div class="cs-row">${r}</div>`).join('');
+  el.hidden = !row1 && !row2;
+}
+
+let ageTimer = null;
+function startAgeTimer() {
+  stopAgeTimer();
+  ageTimer = setInterval(() => {
+    if (document.body.dataset.view === 'detail') renderChatStatus();
+  }, 30000);
+}
+function stopAgeTimer() {
+  if (ageTimer) {
+    clearInterval(ageTimer);
+    ageTimer = null;
+  }
 }
 
 // 正在回答时，标签页标题转起来（切到别的标签也能看到）

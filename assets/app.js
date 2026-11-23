@@ -338,6 +338,9 @@ function init() {
   initComposer();
   initPermissionDialog();
   initNewSession();
+  for (const id of ['#new-dialog', '#perm-dialog', '#fav-dialog', '#rename-dialog', '#confirm-dialog']) {
+    enableBackdropClose($(id));
+  }
 
   $('#search').addEventListener('input', debounce(onSearchInput, 160));
   $('#clear-search').addEventListener('click', () => {
@@ -2192,6 +2195,17 @@ init();
 })();
 
 /* ------------------------------------------------------------------ 聊天 */
+
+// 点击弹窗外的空白区域 = 取消
+function enableBackdropClose(dlg) {
+  if (!dlg) return;
+  dlg.addEventListener('click', (e) => {
+    if (e.target !== dlg) return;
+    const r = dlg.getBoundingClientRect();
+    const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (outside) dlg.close('cancel');
+  });
+}
 
 function initComposer() {
   const modelSel = $('#c-model');

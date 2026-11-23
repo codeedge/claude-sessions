@@ -2349,6 +2349,81 @@ function enableBackdropClose(dlg) {
   });
 }
 
+// --------------------------------------------------------------- 斜杠命令
+const SLASH = { all: [], items: [], idx: 0, open: false };
+
+async function loadSlashCommands() {
+  if (SLASH.all.length) return SLASH.all;
+  try {
+    const r = await api('/api/chat/commands');
+    SLASH.all = r.commands || [];
+  } catch {
+    SLASH.all = [];
+  }
+  return SLASH.all;
+}
+
+function updateSlashMenu() {
+  const ta = $('#c-input');
+  const menu = $('#slash-menu');
+  if (!ta || !menu) return;
+  const text = ta.value;
+  // 只在第一行、且以 / 开头、还没输入空格时提示
+  const m = /^\/([a-zA-Z0-9:_-]*)$/.exec(text);
+  if (!m) {
+    hideSlashMenu();
+    return;
+  }
+  const q = m[1].toLowerCase();
+  loadSlashCommands().then((all) => {
+    const items = all
+      .filter((c) => c.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const ai = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+        const bi = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+        return ai - bi || a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+    if (!items.length) { hideSlashMenu(); return; }
+    SLASH.items = items;
+    SLASH.idx = 0;
+    SLASH.open = true;
+    renderSlashMenu();
+  });
+}
+
+function renderSlashMenu() {
+  const menu = $('#slash-menu');
+  menu.hidden = false;
+  menu.innerHTML = SLASH.items.map((c, i) => `
+    <button class="slash-item${i === SLASH.idx ? ' on' : ''}" data-slash="${esc(c.name)}">
+      <span class="si-name">/${esc(c.name)}</span>
+      <span class="si-desc">${esc(truncate(c.description || '', 70))}</span>
+    </button>`).join('');
+  // 让选中项可见
+  const on = menu.querySelector('.slash-item.on');
+  if (on) on.scrollIntoView({ block: 'nearest' });
+}
+
+function hideSlashMenu() {
+  SLASH.open = false;
+  SLASH.items = [];
+  const menu = $('#slash-menu');
+  if (menu) {
+    menu.hidden = true;
+    menu.innerHTML = '';
+  }
+}
+
+function applySlash(name) {
+  const ta = $('#c-input');
+  ta.value = '/' + name + ' ';
+  hideSlashMenu();
+  ta.focus();
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+}
+
 function initComposer() {
   const modelSel = $('#c-model');
   const effortSel = $('#c-effort');
@@ -2362,15 +2437,32 @@ function initComposer() {
 
   const ta = $('#c-input');
   ta.addEventListener('keydown', (e) => {
+    if (SLASH.open && SLASH.items.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); SLASH.idx = (SLASH.idx + 1) % SLASH.items.length; renderSlashMenu(); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); SLASH.idx = (SLASH.idx - 1 + SLASH.items.length) % SLASH.items.length; renderSlashMenu(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); hideSlashMenu(); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault();
+        applySlash(SLASH.items[SLASH.idx].name);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       sendChat();
     }
   });
+
+  $('#slash-menu').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-slash]');
+    if (btn) applySlash(btn.dataset.slash);
+  });
   ta.addEventListener('input', () => {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    updateSlashMenu();
   });
+  ta.addEventListener('blur', () => setTimeout(hideSlashMenu, 150));
 }
 
 let modelsLoaded = false;

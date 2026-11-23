@@ -1124,3 +1124,8 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .si-desc { color: var(--fg-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .live-note { font-size: 12px; color: var(--branch); margin: 6px 0; }
+
+.panel-chip.main .pc-kind { color: var(--fg-faint); }
+.panel-chip.fork .pc-kind { color: var(--warn); }
+.panel-chip.fork.running .pc-kind::after { content: '●'; margin-left: 4px; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .25; } }

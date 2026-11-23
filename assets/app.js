@@ -1481,6 +1481,7 @@ async function refreshTail() {
 
 // 会话底部列出子代理和后台 shell，点一下在右侧抽屉里看内容，再点关闭
 const PANEL = { open: null };
+const FORKS = []; // /subtask 起的后台分支任务
 
 function renderPanelTabs() {
   const d = S.detail || {};
@@ -1488,13 +1489,23 @@ function renderPanelTabs() {
   if (!box) return;
   const subs = (d.subagent ? [] : (d.subagents || []));
   const shells = (d.subagent ? [] : (d.shells || []));
-  if (!subs.length && !shells.length) {
+  if (!subs.length && !shells.length && !FORKS.length) {
     box.hidden = true;
     box.innerHTML = '';
     return;
   }
   box.hidden = false;
-  const chips = [];
+  const chips = [
+    `<button class="panel-chip main${PANEL.open ? '' : ' on'}" data-panel="main" title="当前会话">● main</button>`,
+  ];
+  for (const f of FORKS) {
+    const secs = f.status === 'running' ? ((Date.now() - f.startedAt) / 1000).toFixed(0) + 's' : '结束';
+    chips.push(`<button class="panel-chip fork${f.status === 'running' ? ' running' : ''}" data-panel="fork:${esc(f.id)}" title="${esc(f.task)}">
+        <span class="pc-kind">fork</span>
+        <span class="pc-name">${esc(truncate(f.task, 24))}</span>
+        <span class="pc-n">${esc(secs)}</span>
+      </button>`);
+  }
   for (const a of subs) {
     chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc(a.description || '')}">
         <span class="pc-kind">子代理</span>
@@ -1542,6 +1553,30 @@ async function togglePanel(key, btn) {
 
   const [kind, id] = key.split(':');
   const d = S.detail || {};
+
+  if (kind === 'main') {
+    closePanel();
+    return;
+  }
+
+  if (kind === 'fork') {
+    const f = FORKS.find((x) => x.id === id);
+    title.textContent = f && f.status === 'running' ? '后台分支任务（运行中）' : '后台分支任务';
+    if (!f) { body.innerHTML = '<div class="pick-empty">找不到这个任务</div>'; return; }
+    if (f.status === 'running') {
+      body.innerHTML = `<div class="panel-sec"><div class="panel-label">任务</div><pre class="panel-pre">${esc(f.task)}</pre></div>
+        <div class="pick-empty">还在跑，结束后可以看完整对话</div>`;
+      return;
+    }
+    try {
+      const r = await api(`/api/sessions/${encodeURIComponent(id)}?from=0&count=200`);
+      body.innerHTML = `<div class="panel-sec"><div class="panel-label">任务</div><pre class="panel-pre">${esc(f.task)}</pre></div>` +
+        (r.turns || []).map((t) => turnHTML(t)).join('');
+    } catch {
+      body.innerHTML = '<div class="pick-empty">这个分支会话可能已被删除</div>';
+    }
+    return;
+  }
 
   if (kind === 'shell') {
     const sh = (d.shells || []).find((x) => x.id === id);
@@ -2807,11 +2842,16 @@ function handleChatLine(line) {
   try { ev = JSON.parse(line); } catch { return; }
 
   if (ev.type === 'ui_subtask') {
-    liveAppend(`<div class="live-note">↳ 已在后台启动子任务（新会话 ${esc(String(ev.id).slice(0, 8))}）</div>`);
+    FORKS.push({ id: ev.id, task: ev.task || '', status: 'running', startedAt: Date.now() });
+    renderPanelTabs();
+    liveAppend(`<div class="live-note">↳ 后台分支任务已启动：${esc(truncate(ev.task || '', 40))}</div>`);
     return;
   }
   if (ev.type === 'ui_subtask_done') {
-    liveAppend(`<div class="live-note">↳ 子任务结束（退出码 ${esc(String(ev.code))}），已出现在会话列表</div>`);
+    const f = FORKS.find((x) => x.id === ev.id);
+    if (f) f.status = 'done';
+    renderPanelTabs();
+    liveAppend(`<div class="live-note">↳ 分支任务结束（退出码 ${esc(String(ev.code))}），底部可以点开看</div>`);
     return;
   }
   if (ev.type === 'ui_permission') {
@@ -3089,6 +3129,7 @@ function startChatStream(id) {
   CHAT.id = id;
   CHAT.model = '';
   CHAT.turn = null;
+  FORKS.length = 0;
   CHAT.effort = '';
   syncStatusFromComposer();
   const es = new EventSource(`/api/chat/stream/${encodeURIComponent(id)}`);

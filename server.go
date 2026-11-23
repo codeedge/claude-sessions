@@ -65,6 +65,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/trash/purge", s.handlePurge)
 	s.mux.HandleFunc("POST /api/open", s.handleOpen)
 	s.mux.HandleFunc("GET /api/chat/models", s.handleChatModels)
+	s.mux.HandleFunc("GET /api/fs/dirs", s.handleDirs)
 	s.mux.HandleFunc("POST /api/chat/send", s.handleChatSend)
 	s.mux.HandleFunc("GET /api/chat/stream/{id}", s.handleChatStream)
 	s.mux.HandleFunc("GET /api/chat/status/{id}", s.handleChatStatus)

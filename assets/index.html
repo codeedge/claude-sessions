@@ -158,16 +158,21 @@
   </main>
 </div>
 
-<dialog id="new-dialog" class="dialog">
+<dialog id="new-dialog" class="dialog wide">
   <h2>新建会话</h2>
-  <div class="dlg-sub">在哪个目录里开始？会作为该会话的工作目录。</div>
-  <label class="field">
-    <span>目录</span>
-    <input id="new-cwd" type="text" spellcheck="false" placeholder="/path/to/project">
-  </label>
+  <div class="dlg-sub">选一个目录作为工作目录，会话里的工具都在这个目录下运行。</div>
+
+  <div class="pick-quick" id="pick-quick"></div>
+
+  <div class="pick-bar">
+    <button class="icon-btn" id="pick-up" title="上一级">↑</button>
+    <span class="pick-path" id="pick-path"></span>
+  </div>
+  <div class="pick-list" id="pick-list"></div>
+
   <div class="dlg-actions">
     <button class="btn ghost" id="new-cancel">取消</button>
-    <button class="btn primary" id="new-ok">创建</button>
+    <button class="btn primary" id="new-ok">在此目录创建</button>
   </div>
 </dialog>
 

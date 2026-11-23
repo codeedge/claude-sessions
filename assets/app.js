@@ -2485,17 +2485,60 @@ async function answerPermission(allow) {
   }
 }
 
+// 新建会话：目录选择器（点进点出，不用手输）
+const PICK = { path: '', parent: '', cwd: '' };
+
 function openNewDialog(cwd) {
   const dlg = $('#new-dialog');
-  $('#new-cwd').value = cwd || localStorage.getItem('lastCwd') || (S.items.find((i) => i.cwd) || {}).cwd || '';
+  PICK.cwd = cwd || '';
   dlg.returnValue = '';
+  renderQuickPicks();
   dlg.showModal();
-  $('#new-cwd').focus();
+  browseDir(cwd || localStorage.getItem('lastCwd') || '');
+}
+
+function renderQuickPicks() {
+  const seen = new Set();
+  const picks = [];
+  for (const p of S.projects) {
+    if (!p.path || seen.has(p.path)) continue;
+    seen.add(p.path);
+    picks.push(p);
+  }
+  const box = $('#pick-quick');
+  box.innerHTML = picks.slice(0, 8).map((p) =>
+    `<button class="quick-chip" data-pick="${esc(p.path)}" title="${esc(p.path)}">${esc(projLabel(p.path))}</button>`
+  ).join('');
+}
+
+async function browseDir(path) {
+  const list = $('#pick-list');
+  const pathEl = $('#pick-path');
+  list.innerHTML = '<div class="pick-empty">读取中…</div>';
+  try {
+    const r = await api('/api/fs/dirs?path=' + encodeURIComponent(path || ''));
+    PICK.path = r.path;
+    PICK.parent = r.parent;
+    pathEl.textContent = r.path;
+    pathEl.title = r.path;
+    $('#pick-up').disabled = !r.parent;
+    if (!r.dirs || !r.dirs.length) {
+      list.innerHTML = '<div class="pick-empty">（没有子目录）</div>';
+    } else {
+      list.innerHTML = r.dirs.map((d) =>
+        `<button class="pick-item" data-enter="${esc(d.path)}"><span class="pick-icon">📁</span>${esc(d.name)}</button>`
+      ).join('');
+    }
+  } catch (err) {
+    list.innerHTML = `<div class="pick-empty">${esc(err.message)}</div>`;
+    pathEl.textContent = path || '';
+  }
 }
 
 function initNewSession() {
   const dlg = $('#new-dialog');
   $('#new-session-top').addEventListener('click', () => openNewDialog(''));
+
   $('#projects').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-new-in]');
     if (!btn) return;
@@ -2505,15 +2548,23 @@ function initNewSession() {
 
   $('#new-cancel').addEventListener('click', () => dlg.close('cancel'));
   $('#new-ok').addEventListener('click', () => dlg.close('ok'));
+
+  $('#pick-up').addEventListener('click', () => { if (PICK.parent) browseDir(PICK.parent); });
+  $('#pick-quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (b) browseDir(b.dataset.pick);
+  });
+  $('#pick-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-enter]');
+    if (b) browseDir(b.dataset.enter);
+  });
+
   dlg.addEventListener('close', () => {
     if (dlg.returnValue !== 'ok') return;
-    const cwd = $('#new-cwd').value.trim();
-    if (!cwd) { toast('请填写目录', true); return; }
+    const cwd = PICK.path;
+    if (!cwd) { toast('请选择目录', true); return; }
     localStorage.setItem('lastCwd', cwd);
     startNewSession(cwd);
-  });
-  $('#new-cwd').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); dlg.close('ok'); }
   });
 }
 

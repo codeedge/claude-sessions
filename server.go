@@ -82,6 +82,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/chat/answer", s.handleChatAnswer)
 	s.mux.HandleFunc("POST /api/rename", s.handleRename)
 	s.mux.HandleFunc("POST /api/session/{id}/prune", s.handlePrune)
+	s.mux.HandleFunc("GET /api/session/{id}/backups", s.handleBackups)
+	s.mux.HandleFunc("POST /api/session/{id}/restore", s.handleRestoreBackup)
 }
 
 // handleRevision 只回文件大小和修改时间，用于前端轮询判断"有没有新内容"。

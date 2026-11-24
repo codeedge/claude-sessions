@@ -152,27 +152,7 @@ func pruneTurns(path, backupDir string, uuids []string) (pruneResult, error) {
 		}
 	}
 
-	mode := os.FileMode(0o600)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".prune-*.jsonl")
-	if err != nil {
-		return res, err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := tmp.Write(out.Bytes()); err != nil {
-		tmp.Close()
-		return res, err
-	}
-	if err := tmp.Close(); err != nil {
-		return res, err
-	}
-	if err := os.Chmod(tmpName, mode); err != nil {
-		return res, err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := writeFileAtomic(path, out.Bytes()); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -263,4 +243,29 @@ func replaceField(line []byte, key, old, new string) []byte {
 
 func trimExt(name string) string {
 	return name[:len(name)-len(filepath.Ext(name))]
+}
+
+// writeFileAtomic 先写临时文件再改名，避免写到一半把原文件弄坏
+func writeFileAtomic(path string, data []byte) error {
+	mode := os.FileMode(0o600)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".restore-*.jsonl")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(name, mode); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }

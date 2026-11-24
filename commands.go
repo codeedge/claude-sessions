@@ -30,7 +30,7 @@ var builtinCommands = []slashCmd{
 	{"agents", "管理子代理", "builtin"},
 	{"tasks", "查看后台任务", "builtin"},
 	{"review", "审查当前改动", "builtin"},
-	{"subtask <任务>", "在后台 fork 一个代理执行这个任务（网页版会新建一条子任务会话）", "builtin"},
+	{"subtask <任务>", "把这个任务交给一个带当前上下文的子代理在后台跑，结果回到面板里（不新建会话）", "builtin"},
 	{"branch", "把当前对话分叉成一条新会话，用来试另一条路", "builtin"},
 	{"fork", "把当前对话分叉成一条新会话，用来试另一条路（等同 /branch）", "builtin"},
 }

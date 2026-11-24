@@ -75,6 +75,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/chat/send", s.handleChatSend)
 	s.mux.HandleFunc("GET /api/chat/stream/{id}", s.handleChatStream)
 	s.mux.HandleFunc("GET /api/chat/status/{id}", s.handleChatStatus)
+	s.mux.HandleFunc("GET /api/chat/subtasks/{id}", s.handleChatSubtasks)
 	s.mux.HandleFunc("POST /api/chat/stop", s.handleChatStop)
 	s.mux.HandleFunc("POST /api/chat/ask", s.handleChatAsk)
 	s.mux.HandleFunc("POST /api/chat/answer", s.handleChatAnswer)

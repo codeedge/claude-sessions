@@ -873,11 +873,8 @@ function renderRowsTree() {
     seen.add(it.id);
     const kids = children.get(it.id) || [];
     const open = depth > 0 || expandedAll || S.forkOpen.has(it.id);
-    const subN = kids.filter((k) => k.subtask).length;
-    const forkN = kids.length - subN;
-    const label = [forkN ? `分支 ${forkN}` : '', subN ? `子任务 ${subN}` : ''].filter(Boolean).join(' · ');
     const toggle = kids.length
-      ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${label}">${label}<span class="caret">${open ? '▾' : '▸'}</span></button>`
+      ? `<button class="fork-toggle${open ? ' open' : ''}" data-toggle-forks="${esc(it.id)}" title="展开/收起 ${kids.length} 个分支会话">分支 ${kids.length}<span class="caret">${open ? '▾' : '▸'}</span></button>`
       : '';
     let html = rowHTML(it, depth > 0, kids.length > 0);
     if (toggle) {
@@ -944,10 +941,8 @@ function rowHTML(it, nested = false, hideForked = false) {
   const branch = it.branch ? `<span class="badge">${esc(it.branch)}</span>` : '';
   const subs = (it.subagents && it.subagents.length)
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
-  const fork = (it.forkOf && !it.subtask)
+  const fork = it.forkOf
     ? `<span class="badge fork" title="分支自：${esc(it.forkOfTitle || it.forkOf)}">分支</span>` : '';
-  const subtask = it.subtask
-    ? `<span class="badge subtask" title="由 /subtask 起的子任务会话${it.forkOfTitle ? '（父会话：' + esc(it.forkOfTitle) + '）' : ''}">子任务</span>` : '';
   const forked = (!it.forkOf && it.forkCount && !hideForked)
     ? `<span class="badge" title="被分支了 ${it.forkCount} 次">分支 ${it.forkCount}</span>` : '';
   const starred = !!(it.starred || (S.marks[it.id] && S.marks[it.id].starred));
@@ -980,7 +975,7 @@ function rowHTML(it, nested = false, hideForked = false) {
         ${star}
         <span class="t">${hlText(it.title || '(无标题)', S.q)}</span>
         ${note}
-        ${live}${branch}${subs}${fork}${forked}${subtask}
+        ${live}${branch}${subs}${fork}${forked}
       </div>
       ${meta}
       <div class="row-path" title="${esc(it.cwd || it.project)}">${esc(it.cwd || it.project || '')}</div>
@@ -1494,7 +1489,7 @@ async function refreshTail() {
 
 // 会话底部列出子代理和后台 shell，点一下在右侧抽屉里看内容，再点关闭
 const PANEL = { open: null, agent: null };
-const FORKS = []; // /subtask 起的子任务（后台跑，跑完是列表里的子会话）
+const FORKS = []; // /subtask 起的子任务（不产生会话，结果只在这个面板里）
 
 function renderPanelTabs() {
   const d = S.detail || {};
@@ -1578,18 +1573,16 @@ async function togglePanel(key, btn) {
     const f = FORKS.find((x) => x.id === id);
     title.textContent = f && f.status === 'running' ? '子任务（运行中）' : '子任务';
     if (!f) { body.innerHTML = '<div class="pick-empty">找不到这个任务</div>'; return; }
+    const head = `<div class="panel-sec"><div class="panel-label">任务</div><pre class="panel-pre">${esc(f.task)}</pre></div>`;
     if (f.status === 'running') {
-      body.innerHTML = `<div class="panel-sec"><div class="panel-label">任务</div><pre class="panel-pre">${esc(f.task)}</pre></div>
-        <div class="pick-empty">还在跑，结束后可以看完整对话</div>`;
+      body.innerHTML = head + '<div class="pick-empty">还在后台跑，结束后这里会显示它的结果</div>';
       return;
     }
-    try {
-      const r = await api(`/api/sessions/${encodeURIComponent(id)}?from=0&count=200`);
-      body.innerHTML = `<div class="panel-sec"><div class="panel-label">任务</div><pre class="panel-pre">${esc(f.task)}</pre></div>` +
-        (r.turns || []).map((t) => turnHTML(t)).join('');
-    } catch {
-      body.innerHTML = '<div class="pick-empty">这个分支会话可能已被删除</div>';
-    }
+    // 子任务不落盘（跟 CLI 一致），内容只能从内存里拿
+    const text = (f.text || '').trim();
+    body.innerHTML = head + (text
+      ? `<div class="panel-sec"><div class="panel-label">结果</div><div class="panel-text">${esc(text)}</div></div>`
+      : '<div class="pick-empty">这个子任务没有输出</div>');
     return;
   }
 
@@ -2935,19 +2928,37 @@ function ensureThinkEl() {
 }
 
 // 处理 CLI 的一条 stream-json 事件
+// 把以前跑过的子任务读回来，刷新页面后底部面板里还在
+async function loadPastSubtasks(id) {
+  try {
+    const r = await api(`/api/chat/subtasks/${encodeURIComponent(id)}`);
+    if (CHAT.id !== id) return;
+    for (const t of (r.tasks || [])) {
+      if (FORKS.some((f) => f.id === t.id)) continue;
+      FORKS.push({
+        id: t.id, task: t.task || '', status: 'done',
+        startedAt: t.startedAt || 0, text: t.text || '',
+      });
+    }
+    if (FORKS.length) renderPanelTabs();
+  } catch {}
+}
+
 function handleChatLine(line) {
   let ev;
   try { ev = JSON.parse(line); } catch { return; }
 
   if (ev.type === 'ui_subtask') {
-    FORKS.push({ id: ev.id, task: ev.task || '', status: 'running', startedAt: Date.now() });
+    if (!FORKS.some((f) => f.id === ev.id)) {
+      FORKS.push({ id: ev.id, task: ev.task || '', status: 'running', startedAt: Date.now() });
+    }
     renderPanelTabs();
     liveAppend(`<div class="live-note">↳ 子任务已在后台启动：${esc(truncate(ev.task || '', 40))}</div>`);
     return;
   }
   if (ev.type === 'ui_subtask_done') {
     const f = FORKS.find((x) => x.id === ev.id);
-    if (f) f.status = 'done';
+    if (f) { f.status = 'done'; f.text = ev.text || ''; }
     renderPanelTabs();
     liveAppend(`<div class="live-note">↳ 子任务结束（退出码 ${esc(String(ev.code))}），底部可以点开看</div>`);
     return;
@@ -3228,6 +3239,7 @@ function startChatStream(id) {
   CHAT.model = '';
   CHAT.turn = null;
   FORKS.length = 0;
+  loadPastSubtasks(id);
   CHAT.effort = '';
   syncStatusFromComposer();
   const es = new EventSource(`/api/chat/stream/${encodeURIComponent(id)}`);

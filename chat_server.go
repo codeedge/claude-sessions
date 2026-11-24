@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -50,8 +51,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	flusher.Flush()
 
-	from := int64(0)
+	// 没有 Last-Event-ID 说明是刚打开页面：从"现在"开始听，
+	// 不要把这之前的旧事件重放一遍（否则刷新后子任务标签、权限弹窗会重复冒出来）。
+	// 断线重连时浏览器会带上 Last-Event-ID，那时才补发漏掉的部分。
+	from := int64(math.MaxInt64)
 	if v := r.Header.Get("Last-Event-ID"); v != "" {
+		from = 0
 		fmt.Sscanf(v, "%d", &from)
 	}
 
@@ -81,6 +86,16 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// handleChatSubtasks 返回某个会话跑过的子任务（面板刷新后还能看到）
+func (s *Server) handleChatSubtasks(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !sessionIDRe.MatchString(id) {
+		writeErr(w, 400, "会话 ID 不合法")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"tasks": loadTasks(s.chat.stateDir, id)})
 }
 
 func (s *Server) handleChatStatus(w http.ResponseWriter, r *http.Request) {

@@ -477,8 +477,9 @@ func localSlash(text string) (cmd, arg string) {
 	return "", ""
 }
 
-// startSubtask 用 --fork-session 在后台跑一个带上下文的任务，
-// 产出是一个新的分支会话，跑完会出现在列表里。
+// startSubtask 在后台跑一个带着当前上下文的子任务。
+// CLI 的 /subtask 只是在同一个会话里 fork 一个子代理，不会多出独立会话，
+// 所以这里用 --fork-session 复制上下文、再 --no-session-persistence 让它跑完不落盘。
 func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 	claude := resolveClaude()
 	cwd := usableDir(req.CWD)
@@ -493,6 +494,7 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 		"--resume", req.SessionID,
 		"--fork-session",
 		"--session-id", id,
+		"--no-session-persistence", // 不生成会话文件，列表里也就不会多出一行
 		"--permission-mode", "acceptEdits",
 	}
 	if req.Model != "" {
@@ -519,8 +521,8 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 		return fmt.Errorf("启动子任务失败: %w", err)
 	}
 
+	started := time.Now().UnixMilli()
 	s.publish(meta("subtask", map[string]any{"id": id, "task": task}))
-	markSubtask(m.stateDir, id, req.SessionID)
 
 	go func() {
 		payload, _ := json.Marshal(map[string]any{
@@ -530,12 +532,18 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 		_, _ = stdin.Write(append(payload, '\n'))
 		_ = stdin.Close()
 
+		// 子任务的事件不能混进主会话的流里（否则前端会把它的输出当成主会话在说话），
+		// 这里只把它的文字收下来，结束时一次性给前端
+		var out strings.Builder
 		sc := bufio.NewScanner(stdout)
 		sc.Buffer(make([]byte, 0, 256<<10), 8<<20)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
-			if line != "" {
-				s.publish(line)
+			if line == "" {
+				continue
+			}
+			if out.Len() < 200<<10 {
+				out.WriteString(subtaskText(line))
 			}
 		}
 		err := cmd.Wait()
@@ -547,12 +555,36 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 				code = -1
 			}
 		}
-		s.publish(meta("subtask_done", map[string]any{"id": id, "code": code}))
-		if m.index != nil {
-			go m.index.MaybeRescan(0)
-		}
+		s.publish(meta("subtask_done", map[string]any{"id": id, "code": code, "text": out.String()}))
+		saveTask(m.stateDir, taskRecord{
+			ID: id, Parent: req.SessionID, Task: task, Code: code,
+			Text: out.String(), StartedAt: started, EndedAt: time.Now().UnixMilli(),
+		})
 	}()
 	return nil
+}
+
+// subtaskText 从子任务的一条 stream-json 事件里取出助手说的话，用来在面板里展示
+func subtaskText(line string) string {
+	var ev struct {
+		Type    string `json:"type"`
+		Message struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal([]byte(line), &ev) != nil || ev.Type != "assistant" {
+		return ""
+	}
+	var b strings.Builder
+	for _, c := range ev.Message.Content {
+		if c.Type == "text" && c.Text != "" {
+			b.WriteString(c.Text)
+		}
+	}
+	return b.String()
 }
 
 // newSessionID 生成一个随机 UUID v4
@@ -564,34 +596,66 @@ func newSessionID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// markSubtask 把 /subtask 产生的会话记下来（会话 ID → 父会话 ID），
-// 索引里据此把它折叠到父会话下面，并且不算分支数
-func markSubtask(stateDir, id, parent string) {
+// taskRecord 是一次 /subtask 的记录。子任务本身不落盘（跟 CLI 一样，
+// 不产生独立会话），但结果得留在面板里，刷新后还能看到。
+type taskRecord struct {
+	ID        string `json:"id"`
+	Parent    string `json:"parent"`
+	Task      string `json:"task"`
+	Code      int    `json:"code"`
+	Text      string `json:"text"`
+	StartedAt int64  `json:"startedAt"`
+	EndedAt   int64  `json:"endedAt"`
+}
+
+const taskLogMax = 200
+
+func tasksPath(stateDir string) string {
+	return filepath.Join(stateDir, "tasks.jsonl")
+}
+
+// saveTask 把一次子任务追加到 tasks.jsonl，只保留最近 200 条
+func saveTask(stateDir string, rec taskRecord) {
 	if stateDir == "" {
 		return
 	}
-	path := filepath.Join(stateDir, "subtasks.json")
-	m := map[string]string{}
+	path := tasksPath(stateDir)
+	var all []taskRecord
 	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &m)
+		for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			var r taskRecord
+			if line != "" && json.Unmarshal([]byte(line), &r) == nil && r.ID != "" && r.ID != rec.ID {
+				all = append(all, r)
+			}
+		}
 	}
-	m[id] = parent
-	if b, err := json.MarshalIndent(m, "", "  "); err == nil {
-		_ = os.WriteFile(path, b, 0o600)
+	all = append(all, rec)
+	if len(all) > taskLogMax {
+		all = all[len(all)-taskLogMax:]
 	}
+	var sb strings.Builder
+	for _, r := range all {
+		b, _ := json.Marshal(r)
+		sb.Write(b)
+		sb.WriteByte('\n')
+	}
+	_ = os.WriteFile(path, []byte(sb.String()), 0o600)
 }
 
-// loadSubtasks 读回 /subtask 产生的会话集合（会话 ID → 父会话 ID）
-func loadSubtasks(stateDir string) map[string]string {
-	out := map[string]string{}
-	b, err := os.ReadFile(filepath.Join(stateDir, "subtasks.json"))
+// loadTasks 读回某个会话下的子任务记录，顺手把已被删掉的父会话记录过滤掉
+func loadTasks(stateDir, parent string) []taskRecord {
+	b, err := os.ReadFile(tasksPath(stateDir))
 	if err != nil {
-		return out
+		return nil
 	}
-	var m map[string]string
-	if json.Unmarshal(b, &m) == nil {
-		for id, parent := range m {
-			out[id] = parent
+	var out []taskRecord
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var r taskRecord
+		if line == "" || json.Unmarshal([]byte(line), &r) != nil {
+			continue
+		}
+		if r.Parent == parent {
+			out = append(out, r)
 		}
 	}
 	return out

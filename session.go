@@ -91,6 +91,7 @@ type SessionInfo struct {
 	ForkOf        string        `json:"forkOf,omitempty"`      // 从哪个会话 fork/branch 出来
 	ForkOfTitle   string        `json:"forkOfTitle,omitempty"` // 来源会话的标题
 	ForkCount     int           `json:"forkCount,omitempty"`   // 这个会话被 fork 了几次
+	Subtask       bool          `json:"subtask,omitempty"`     // /subtask 起的子任务会话（不算分支）
 
 	// internal
 	Path          string    `json:"-"`

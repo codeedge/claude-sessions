@@ -61,17 +61,18 @@ type permAnswer struct {
 }
 
 type chatManager struct {
-	mu    sync.Mutex
-	sess  map[string]*chatSession
-	token string // MCP 回调用的令牌
-	index *Index
-	base  string // 服务地址，如 http://127.0.0.1:9999
+	mu       sync.Mutex
+	sess     map[string]*chatSession
+	token    string // MCP 回调用的令牌
+	stateDir string
+	index    *Index
+	base     string // 服务地址，如 http://127.0.0.1:9999
 }
 
 func newChatManager(ix *Index, stateDir string) *chatManager {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	m := &chatManager{sess: map[string]*chatSession{}, index: ix, token: hex.EncodeToString(b)}
+	m := &chatManager{sess: map[string]*chatSession{}, index: ix, token: hex.EncodeToString(b), stateDir: stateDir}
 	// 令牌落盘（0600），MCP 子进程和调试时都能用
 	if stateDir != "" {
 		if err := os.WriteFile(filepath.Join(stateDir, "chat-token"), []byte(m.token), 0o600); err == nil {
@@ -519,6 +520,7 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 	}
 
 	s.publish(meta("subtask", map[string]any{"id": id, "task": task}))
+	markSubtask(m.stateDir, id, req.SessionID)
 
 	go func() {
 		payload, _ := json.Marshal(map[string]any{
@@ -560,4 +562,36 @@ func newSessionID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// markSubtask 把 /subtask 产生的会话记下来，索引里就不把它当归档分支
+func markSubtask(stateDir, id, parent string) {
+	if stateDir == "" {
+		return
+	}
+	path := filepath.Join(stateDir, "subtasks.json")
+	m := map[string]string{}
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &m)
+	}
+	m[id] = parent
+	if b, err := json.MarshalIndent(m, "", "  "); err == nil {
+		_ = os.WriteFile(path, b, 0o600)
+	}
+}
+
+// loadSubtasks 读回 /subtask 产生的会话集合
+func loadSubtasks(stateDir string) map[string]bool {
+	out := map[string]bool{}
+	b, err := os.ReadFile(filepath.Join(stateDir, "subtasks.json"))
+	if err != nil {
+		return out
+	}
+	var m map[string]string
+	if json.Unmarshal(b, &m) == nil {
+		for id := range m {
+			out[id] = true
+		}
+	}
+	return out
 }

@@ -943,6 +943,8 @@ function rowHTML(it, nested = false, hideForked = false) {
     ? `<span class="badge" title="子代理会话">↳${it.subagents.length}</span>` : '';
   const fork = it.forkOf
     ? `<span class="badge fork" title="分支自：${esc(it.forkOfTitle || it.forkOf)}">分支</span>` : '';
+  const subtask = it.subtask
+    ? `<span class="badge" title="由 /subtask 起的子任务会话">子任务</span>` : '';
   const forked = (!it.forkOf && it.forkCount && !hideForked)
     ? `<span class="badge" title="被分支了 ${it.forkCount} 次">分支 ${it.forkCount}</span>` : '';
   const starred = !!(it.starred || (S.marks[it.id] && S.marks[it.id].starred));
@@ -975,7 +977,7 @@ function rowHTML(it, nested = false, hideForked = false) {
         ${star}
         <span class="t">${hlText(it.title || '(无标题)', S.q)}</span>
         ${note}
-        ${live}${branch}${subs}${fork}${forked}
+        ${live}${branch}${subs}${fork}${forked}${subtask}
       </div>
       ${meta}
       <div class="row-path" title="${esc(it.cwd || it.project)}">${esc(it.cwd || it.project || '')}</div>

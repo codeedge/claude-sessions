@@ -82,7 +82,7 @@ func scheduleScavenge() {
 //  2. 压缩后继续（continued from a previous conversation）的会话从中间接上，
 //     首条 uuid 是新生成的 summary，但这段历史在原会话里也能找到，
 //     所以扫描时撞见"别人的锚点"就说明那个会话是从当前文件分叉出去的
-func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev map[string]*SessionInfo, subtasks map[string]bool) {
+func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev map[string]*SessionInfo, subtasks map[string]string) {
 	// 未变化的会话在 out 里直接复用了 prev 的指针，reset 之前先把旧结论抄下来
 	prevFork := make(map[string]string, len(prev))
 	for id, s := range prev {
@@ -94,7 +94,7 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 	for _, s := range sessions {
 		s.ForkOf, s.ForkOfTitle, s.ForkCount = "", "", 0
 		// /subtask 起的会话算子任务，不算 /branch、/fork 那种分支
-		s.Subtask = subtasks[s.ID]
+		_, s.Subtask = subtasks[s.ID]
 	}
 
 	pick := func(self string, cands []string) *SessionInfo {
@@ -172,8 +172,21 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 		}
 	}
 
+	// /subtask 有明确的父会话：把子任务挂在父会话下面，而不是像分支那样留在列表顶层
+	for id, parentID := range subtasks {
+		child := sessions[id]
+		if child == nil || parentID == "" || parentID == id {
+			continue
+		}
+		if p := sessions[parentID]; p != nil {
+			child.ForkOf = p.ID
+			child.ForkOfTitle = p.Title
+		}
+	}
+
 	for _, s := range sessions {
-		if s.ForkOf != "" {
+		// 子任务不参与"被分支了几次"的计数
+		if s.ForkOf != "" && !s.Subtask {
 			if p := sessions[s.ForkOf]; p != nil {
 				p.ForkCount++
 			}

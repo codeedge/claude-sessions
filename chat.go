@@ -564,7 +564,8 @@ func newSessionID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// markSubtask 把 /subtask 产生的会话记下来，索引里就不把它当归档分支
+// markSubtask 把 /subtask 产生的会话记下来（会话 ID → 父会话 ID），
+// 索引里据此把它折叠到父会话下面，并且不算分支数
 func markSubtask(stateDir, id, parent string) {
 	if stateDir == "" {
 		return
@@ -580,17 +581,17 @@ func markSubtask(stateDir, id, parent string) {
 	}
 }
 
-// loadSubtasks 读回 /subtask 产生的会话集合
-func loadSubtasks(stateDir string) map[string]bool {
-	out := map[string]bool{}
+// loadSubtasks 读回 /subtask 产生的会话集合（会话 ID → 父会话 ID）
+func loadSubtasks(stateDir string) map[string]string {
+	out := map[string]string{}
 	b, err := os.ReadFile(filepath.Join(stateDir, "subtasks.json"))
 	if err != nil {
 		return out
 	}
 	var m map[string]string
 	if json.Unmarshal(b, &m) == nil {
-		for id := range m {
-			out[id] = true
+		for id, parent := range m {
+			out[id] = parent
 		}
 	}
 	return out

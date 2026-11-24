@@ -1856,6 +1856,10 @@ function turnHTML(t) {
     return `<details class="think note"><summary>${esc(label)} · ${Array.from(n).length} 字</summary><div>${esc(n)}</div></details>`;
   }).join('');
   const empty = t.command ? '（该命令没有产生回复）' : '（本轮没有助手回复，可能被中断）';
+  // 提示里写了 [Image #1] 但这一轮没有任何图片块：说明当时截图没存进会话（也没送到模型）
+  const lostImg = /\[Image #\d+\]/.test(t.prompt || '') && !(t.images || []).length
+    ? '<div class="imgblk">这条消息里的截图没有存进会话文件，当时模型也没看到它</div>'
+    : '';
 
   // 把整轮的内容块拍平：工具调用（assistant）和它的结果（user）分属两条消息，
   // 拍平后才能合并成一行摘要。
@@ -1871,6 +1875,7 @@ function turnHTML(t) {
   return `<article class="turn" id="t-${t.index}" data-turn="${t.index}">
     ${del}
     ${promptBlock}
+    ${lostImg}
     ${(t.images || []).length ? `<div class="turn-images">${t.images.map((b) => imgHTML(b.detail, b.imageIndex, b.source)).join('')}</div>` : ''}
     ${notes}
     ${body || `<div class="imgblk">${empty}</div>`}

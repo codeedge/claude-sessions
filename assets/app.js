@@ -446,7 +446,6 @@ function init() {
   $('#d-rename').addEventListener('click', () => openRenameDialog(S.detailId));
   $('#export-md').addEventListener('click', exportMd);
   $('#delete-one').addEventListener('click', () => deleteOne());
-  $('#restore-one').addEventListener('click', () => restoreLatest());
   $('#load-more').addEventListener('click', loadMoreTurns);
   $('#select-all').addEventListener('change', onSelectAll);
   $('#bulk-delete').addEventListener('click', bulkDelete);
@@ -1406,7 +1405,6 @@ function renderDetail() {
 
   renderTurns();
   renderOutline();
-  refreshBackups(d.id);
 }
 
 // ---------- 运行中的会话：静默增量刷新 ----------
@@ -1918,51 +1916,6 @@ function blockHTML(b) {
   }
 }
 
-// 问一下服务端这个会话有没有删除前的备份，有就显示「恢复删除」
-async function refreshBackups(id) {
-  const btn = $('#restore-one');
-  if (!btn) return;
-  try {
-    const r = await api(`/api/session/${encodeURIComponent(id)}/backups`);
-    const list = realBackups(r.backups || []);
-    btn.hidden = !list.length;
-    btn.dataset.count = String(list.length);
-    btn.title = list.length ? `恢复删除（最近一次：${abs(new Date(list[0].ts).toISOString())}）` : '';
-  } catch {
-    btn.hidden = true;
-  }
-}
-
-// 恢复本身也会产生 -prerestore 备份，这里只看真正"删除前"的那份
-function realBackups(list) {
-  return list.filter((b) => !b.name.includes('-prerestore'));
-}
-
-async function restoreLatest() {
-  if (!S.detailId) return;
-  const r = await api(`/api/session/${encodeURIComponent(S.detailId)}/backups`).catch(() => null);
-  const list = realBackups((r && r.backups) || []);
-  if (!list.length) { toast('没有可恢复的备份', true); return; }
-  const when = abs(new Date(list[0].ts).toISOString());
-  const ok = await confirmDialog(
-    '恢复删除的内容',
-    `会用 ${when} 那次删除前的备份覆盖当前会话文件（当前状态也会先存一份 -prerestore 备份）。`,
-    '恢复',
-  );
-  if (!ok) return;
-  try {
-    await api(`/api/session/${encodeURIComponent(S.detailId)}/restore`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: list[0].name }),
-    });
-    previewCache.clear();
-    await openDetail(S.detailId, null, 0);
-    toast('已恢复到删除前');
-  } catch (err) {
-    toast('恢复失败: ' + err.message, true);
-  }
-}
-
 // 删除会话里的某一整块（用户那一轮到下一条用户消息之前的所有内容）
 async function deleteTurnBlock(uuid) {
   const t = (S.turns || []).find((x) => x.uuid === uuid);
@@ -1970,8 +1923,7 @@ async function deleteTurnBlock(uuid) {
   const ok = await confirmDialog(
     '删除这一块',
     `这一轮${preview ? '（用户：' + preview + '）' : ''}会从会话文件里整轮删掉，` +
-    '它的助手回复和工具调用也一起删。删之前会自动整份备份到 ~/.claude-sessions/backups。 ' +
-    '删完消息链会自动接上，CLI 里还能继续 resume。',
+    '它的助手回复和工具调用也一起删，删完消息链会自动接上，CLI 里还能继续 resume。',
     '删除这一块',
   );
   if (!ok) return;
@@ -1980,20 +1932,7 @@ async function deleteTurnBlock(uuid) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uuids: [uuid] }),
     });
-    const bakName = res.backup ? res.backup.split('/').pop() : '';
-    toastUndo(
-      `已删除 ${res.removedTurns} 块（${res.removedLines} 行），剩 ${res.remainTurns} 轮`,
-      '撤销',
-      async () => {
-        await api(`/api/session/${encodeURIComponent(S.detailId)}/restore`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: bakName }),
-        });
-        previewCache.clear();
-        await openDetail(S.detailId, S.agent, 0);
-        toast('已恢复');
-      },
-    );
+    toast(`已删除 ${res.removedTurns} 块（${res.removedLines} 行），剩 ${res.remainTurns} 轮`);
     previewCache.clear();
     await openDetail(S.detailId, S.agent, 0);
   } catch (err) {

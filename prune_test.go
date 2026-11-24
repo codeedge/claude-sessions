@@ -193,3 +193,18 @@ func TestPruneUnknownUUID(t *testing.T) {
 		t.Fatal("不存在的块应该报错")
 	}
 }
+
+func TestPruneKeepsBackupCountBounded(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 25; i++ {
+		name := filepath.Join(dir, "x-"+string(rune('a'+i))+".jsonl")
+		if err := os.WriteFile(name, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pruneOldBackups(dir, 20)
+	ents, _ := os.ReadDir(dir)
+	if len(ents) != 20 {
+		t.Fatalf("应该只留 20 份，实际 %d", len(ents))
+	}
+}

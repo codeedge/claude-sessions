@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -141,13 +142,15 @@ func pruneTurns(path, backupDir string, uuids []string) (pruneResult, error) {
 	res.KeepLines = keepLines
 	res.RemainTurns = len(order) - removedTurns
 
-	// 先备份，再原子替换
+	// 先静默备份一份（界面上没有恢复入口，纯粹是删错了还能捞回来），
+	// 再原子替换。备份只保留最近 backupKeep 份，不会无限长大。
 	if backupDir != "" {
 		if err := os.MkdirAll(backupDir, 0o700); err == nil {
 			name := fmt.Sprintf("%s-%s.jsonl", trimExt(filepath.Base(path)), time.Now().Format("20060102-150405"))
 			dst := filepath.Join(backupDir, name)
 			if err := os.WriteFile(dst, data, 0o600); err == nil {
 				res.Backup = dst
+				pruneOldBackups(backupDir, backupKeep)
 			}
 		}
 	}
@@ -268,4 +271,36 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// backupKeep 备份目录里最多留几份，超过就删最旧的
+const backupKeep = 20
+
+func pruneOldBackups(dir string, keep int) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type item struct {
+		name string
+		mod  int64
+	}
+	items := make([]item, 0, len(ents))
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		items = append(items, item{e.Name(), fi.ModTime().UnixNano()})
+	}
+	if len(items) <= keep {
+		return
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].mod > items[j].mod })
+	for _, it := range items[keep:] {
+		_ = os.Remove(filepath.Join(dir, it.name))
+	}
 }

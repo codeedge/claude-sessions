@@ -1802,7 +1802,11 @@ function turnHTML(t) {
   }
   const body = renderBlocks(flat);
 
+  const del = t.uuid
+    ? `<button class="turn-del" data-del-turn="${esc(t.uuid)}" title="删除这一块（整轮，删前会备份）">✕</button>`
+    : '';
   return `<article class="turn" id="t-${t.index}" data-turn="${t.index}">
+    ${del}
     ${promptBlock}
     ${(t.images || []).length ? `<div class="turn-images">${t.images.map((b) => imgHTML(b.detail, b.imageIndex)).join('')}</div>` : ''}
     ${notes}
@@ -1912,7 +1916,40 @@ function blockHTML(b) {
   }
 }
 
+// 删除会话里的某一整块（用户那一轮到下一条用户消息之前的所有内容）
+async function deleteTurnBlock(uuid) {
+  const t = (S.turns || []).find((x) => x.uuid === uuid);
+  const preview = t ? truncate((t.prompt || t.command || '').replace(/\s+/g, ' '), 60) : '';
+  const ok = await confirmDialog(
+    '删除这一块',
+    `这一轮${preview ? '（用户：' + preview + '）' : ''}会从会话文件里整轮删掉，` +
+    '它的助手回复和工具调用也一起删。删之前会自动整份备份到 ~/.claude-sessions/backups。 ' +
+    '删完消息链会自动接上，CLI 里还能继续 resume。',
+    '删除这一块',
+  );
+  if (!ok) return;
+  try {
+    const res = await api(`/api/session/${encodeURIComponent(S.detailId)}/prune`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uuids: [uuid] }),
+    });
+    const bak = res.backup ? '，原文件备份在 ' + res.backup.replace(/^.*\/backups\//, '~/.claude-sessions/backups/') : '';
+    toast(`已删除 ${res.removedTurns} 块（${res.removedLines} 行），剩 ${res.remainTurns} 轮${bak}`);
+    previewCache.clear();
+    await openDetail(S.detailId, S.agent, 0);
+  } catch (err) {
+    toast('删除失败: ' + err.message, true);
+  }
+}
+
 function onConvClick(e) {
+  const delBtn = e.target.closest('[data-del-turn]');
+  if (delBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    deleteTurnBlock(delBtn.dataset.delTurn);
+    return;
+  }
   const agentBtn = e.target.closest('.subagent-btn');
   if (agentBtn) {
     openDetail(S.detailId, agentBtn.dataset.agent, 0);

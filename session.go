@@ -42,6 +42,7 @@ type Message struct {
 
 // Turn is one user prompt plus everything the agent did in response.
 type Turn struct {
+	UUID     string    `json:"uuid,omitempty"`   // 这一轮起始用户消息的 uuid（按块删除时定位）
 	Images   []Block   `json:"images,omitempty"` // 用户粘贴的图片
 	Index    int       `json:"index"`
 	Prompt   string    `json:"prompt"`

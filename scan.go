@@ -687,6 +687,7 @@ func parseTurns(path string) ([]Turn, error) {
 			// A skill or slash-command invocation carries its arguments inline.
 			if cmd, args, ok := parseSlashCommand(ci.Text); ok {
 				turns = append(turns, Turn{
+					UUID:    rec.UUID,
 					Index:   len(turns) + 1,
 					Command: cmd,
 					Prompt:  clip(args, maxBlockText),
@@ -716,6 +717,7 @@ func parseTurns(path string) ([]Turn, error) {
 				imgs = append(imgs, b)
 			}
 			turns = append(turns, Turn{
+				UUID:   rec.UUID,
 				Index:  len(turns) + 1,
 				Prompt: clip(ci.Text, maxBlockText),
 				TS:     ts,
@@ -729,7 +731,7 @@ func parseTurns(path string) ([]Turn, error) {
 			if ci.HasToolResult {
 				return
 			}
-			turns = append(turns, Turn{Index: len(turns) + 1, TS: ts})
+			turns = append(turns, Turn{UUID: rec.UUID, Index: len(turns) + 1, TS: ts})
 			cur = len(turns) - 1
 		}
 

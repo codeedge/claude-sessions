@@ -27,10 +27,11 @@ type Server struct {
 	addr     string
 	chat     *chatManager
 	settings *settingsStore
+	stateDir string
 }
 
 func NewServer(ix *Index, marks *MarkStore, addr, stateDir string) *Server {
-	s := &Server{ix: ix, marks: marks, mux: http.NewServeMux(), addr: addr}
+	s := &Server{ix: ix, marks: marks, mux: http.NewServeMux(), addr: addr, stateDir: stateDir}
 	s.chat = newChatManager(ix, stateDir)
 	s.settings = newSettingsStore(stateDir)
 	s.chat.base = "http://" + addr
@@ -80,6 +81,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/chat/ask", s.handleChatAsk)
 	s.mux.HandleFunc("POST /api/chat/answer", s.handleChatAnswer)
 	s.mux.HandleFunc("POST /api/rename", s.handleRename)
+	s.mux.HandleFunc("POST /api/session/{id}/prune", s.handlePrune)
 }
 
 // handleRevision 只回文件大小和修改时间，用于前端轮询判断"有没有新内容"。

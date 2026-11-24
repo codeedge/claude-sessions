@@ -1142,8 +1142,17 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .inherited-body { margin-top: 10px; opacity: .75; }
 
 /* 输入框内 /命令 高亮（镜像层） */
-.composer-field { position: relative; flex: 1; min-width: 0; display: flex; }
-.composer-field textarea { width: 100%; }
+.composer-field {
+  position: relative; flex: 1; min-width: 0; display: flex;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px;
+}
+.composer-field:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.composer-field textarea {
+  width: 100%; background: transparent !important; border-color: transparent !important;
+  color: transparent; caret-color: var(--fg);
+}
+.composer-field textarea:focus { background: transparent !important; border-color: transparent !important; }
+.composer-field textarea::placeholder { color: var(--fg-faint); }
 .composer-highlight {
   position: absolute; inset: 0; z-index: 0;
   padding: 10px 12px; border: 1px solid transparent; border-radius: 10px;

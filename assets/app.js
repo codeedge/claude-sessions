@@ -1348,7 +1348,8 @@ function closeDetail() {
   S.detail = null;
   history.replaceState(null, '', location.pathname + location.search);
   setView('list');
-  loadSessions();
+  $('#main').scrollTop = 0;
+  loadSessions().then(() => { $('#main').scrollTop = 0; });
 }
 
 function renderDetail() {

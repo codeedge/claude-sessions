@@ -208,3 +208,16 @@ func TestPruneKeepsBackupCountBounded(t *testing.T) {
 		t.Fatalf("应该只留 20 份，实际 %d", len(ents))
 	}
 }
+
+func TestImageSourcePath(t *testing.T) {
+	p, ok := imageSourcePath("[Image: source: /tmp/claude-0/x/images/1.png]")
+	if !ok || p != "/tmp/claude-0/x/images/1.png" {
+		t.Fatalf("解析失败: %q %v", p, ok)
+	}
+	if _, ok := imageSourcePath("普通文字"); ok {
+		t.Fatal("不该识别成图片")
+	}
+	if mediaTypeOfPath("/a/b.PNG") != "image/png" {
+		t.Fatal("png 识别失败")
+	}
+}

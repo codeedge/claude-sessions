@@ -416,6 +416,15 @@ function init() {
       toast('复制失败: ' + id, true);
     }
   });
+  // 图片文件被系统清掉后（临时目录会清理），别留个裂图，换成一行提示
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const box = img.closest('.turn-img');
+    if (!box) return;
+    box.outerHTML = '<div class="imgblk">[图片文件已不在磁盘上]</div>';
+  }, true);
+
   $('#conv').addEventListener('click', onGapClick);
   $('#conv').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-img]');
@@ -1862,7 +1871,7 @@ function turnHTML(t) {
   return `<article class="turn" id="t-${t.index}" data-turn="${t.index}">
     ${del}
     ${promptBlock}
-    ${(t.images || []).length ? `<div class="turn-images">${t.images.map((b) => imgHTML(b.detail, b.imageIndex)).join('')}</div>` : ''}
+    ${(t.images || []).length ? `<div class="turn-images">${t.images.map((b) => imgHTML(b.detail, b.imageIndex, b.source)).join('')}</div>` : ''}
     ${notes}
     ${body || `<div class="imgblk">${empty}</div>`}
   </article>`;
@@ -1907,13 +1916,14 @@ function closeImageViewer() {
 // 右侧抽屉里看子代理记录时要临时指到那个 agent 的文件，否则会取错图。
 let IMG_CTX = null;
 
-function imgHTML(media, index) {
+function imgHTML(media, index, source) {
   const ctx = IMG_CTX || { sid: S.detailId, agent: S.agent };
   if (index === undefined || index === null || !ctx.sid) {
     return `<div class="imgblk">[图片 ${esc(media || '')}]</div>`;
   }
   const qs = new URLSearchParams({ i: String(index) });
   if (ctx.agent) qs.set('agent', ctx.agent);
+  if (source === 'file') qs.set('file', '1'); // 图片是磁盘上的文件，不是内嵌 base64
   const src = `/api/sessions/${encodeURIComponent(ctx.sid)}/image?` + qs.toString();
   const n = index + 1;
   return `<button class="turn-img" type="button" data-img="${esc(src)}" data-num="${n}" title="第 ${n} 张 · 点击放大">
@@ -1969,7 +1979,7 @@ function blockHTML(b) {
       </details>`;
     }
     case 'image':
-      return imgHTML(b.detail, b.imageIndex);
+      return imgHTML(b.detail, b.imageIndex, b.source);
     default:
       return '';
   }

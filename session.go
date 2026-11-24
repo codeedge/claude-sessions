@@ -24,7 +24,8 @@ type Block struct {
 	Input      json.RawMessage `json:"input,omitempty"`
 	ToolUseID  string          `json:"toolUseId,omitempty"`
 	IsError    bool            `json:"isError,omitempty"`
-	ImageIndex int             `json:"imageIndex"` // 会话内第几张图，用于按需取图（0 也要输出）
+	ImageIndex int             `json:"imageIndex"`       // 会话内第几张图，用于按需取图（0 也要输出）
+	Source     string          `json:"source,omitempty"` // "file" = 图片是磁盘上的文件（[Image: source: ...]），否则是内嵌 base64
 }
 
 // Message is a single conversation message.

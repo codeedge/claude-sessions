@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -658,6 +659,7 @@ func parseTurns(path string) ([]Turn, error) {
 	cur := -1
 	seen := make(map[string]bool, 256)
 	imgSeq := 0
+	fileImgSeq := 0 // 磁盘文件形式的图片（粘贴图片记录）序号
 
 	err := eachRecord(path, func(line []byte) {
 		var rec rawRecord
@@ -697,6 +699,21 @@ func parseTurns(path string) ([]Turn, error) {
 				return
 			}
 			if rec.IsMeta {
+				// 粘贴的图片会单独记一条 "[Image: source: /path/1.png]"，
+				// 图片本身不在 JSONL 里，要把这个文件路径记到当前这一轮上
+				if imgPath, ok := imageSourcePath(ci.Text); ok {
+					if cur >= 0 {
+						media := mediaTypeOfPath(imgPath)
+						turns[cur].Images = append(turns[cur].Images, Block{
+							Kind:       "image",
+							Detail:     media,
+							ImageIndex: fileImgSeq,
+							Source:     "file",
+						})
+						fileImgSeq++
+					}
+					return
+				}
 				// Skill bodies and injected context: keep them as collapsed notes
 				// on the current turn instead of throwing the content away.
 				if cur >= 0 && isNoteText(ci.Text) {
@@ -962,4 +979,35 @@ func collectShells(turns []Turn) []ShellInfo {
 		out = append(out, st.info)
 	}
 	return out
+}
+
+// imageSourcePath 匹配 Claude Code 记录粘贴图片的那一行：
+// "[Image: source: /tmp/claude-0/.../images/1.png]"
+var imageSourceRe = regexp.MustCompile(`^\[Image: source: (.+)\]$`)
+
+func imageSourcePath(text string) (string, bool) {
+	m := imageSourceRe.FindStringSubmatch(strings.TrimSpace(text))
+	if m == nil {
+		return "", false
+	}
+	p := strings.TrimSpace(m[1])
+	if !strings.HasPrefix(p, "/") {
+		return "", false
+	}
+	return p, true
+}
+
+func mediaTypeOfPath(p string) string {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "image"
+	}
 }

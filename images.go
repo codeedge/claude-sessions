@@ -8,6 +8,8 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // 会话里的图片是内嵌的 base64（用户粘贴的截图），一条 user 记录里
@@ -92,4 +94,107 @@ func imageInLine(line []byte, target int, seen *int) (string, []byte, bool) {
 		return mt, raw, true
 	}
 	return "", nil, false
+}
+
+// ---------------------------------------------------------------- 磁盘图片
+// 粘贴的图片有时不写进 JSONL，而是记一条 "[Image: source: /path/x.png]"，
+// 图片本体留在临时目录里（/tmp/claude-0/.../images/1.png）。
+
+var imageSourceNeedle = []byte("[Image: source: ")
+
+// extractFileImage 取会话里第 target 张"文件形式"的图片
+func extractFileImage(path string, target int) (imagePayload, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return imagePayload{}, err
+	}
+	defer f.Close()
+
+	br := bufio.NewReaderSize(f, 256<<10)
+	seen := 0
+	for {
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 && bytes.Contains(line, imageSourceNeedle) {
+			for _, p := range imagePathsInLine(line) {
+				if seen == target {
+					return readImageFile(p)
+				}
+				seen++
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return imagePayload{}, err
+		}
+	}
+	return imagePayload{}, errors.New("图片不存在")
+}
+
+// imagePathsInLine 抽出这一行里所有的 [Image: source: ...] 路径
+func imagePathsInLine(line []byte) []string {
+	var rec struct {
+		Message struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &rec) != nil || len(rec.Message.Content) == 0 {
+		return nil
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(rec.Message.Content, &blocks) != nil {
+		return nil
+	}
+	var out []string
+	for _, b := range blocks {
+		if b.Type != "text" {
+			continue
+		}
+		if p, ok := imageSourcePath(b.Text); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// readImageFile 读磁盘上的图片，只允许 Claude Code 自己的临时目录和 ~/.claude 下
+func readImageFile(p string) (imagePayload, error) {
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return imagePayload{}, errors.New("图片文件不存在")
+	}
+	if !imagePathAllowed(real) {
+		return imagePayload{}, errors.New("图片路径不在允许范围内")
+	}
+	fi, err := os.Stat(real)
+	if err != nil || !fi.Mode().IsRegular() {
+		return imagePayload{}, errors.New("不是普通文件")
+	}
+	if fi.Size() > 32<<20 {
+		return imagePayload{}, errors.New("图片太大")
+	}
+	data, err := os.ReadFile(real)
+	if err != nil {
+		return imagePayload{}, err
+	}
+	return imagePayload{MediaType: mediaTypeOfPath(real), Data: data}, nil
+}
+
+// imagePathAllowed 只放行 /tmp/claude-* 和 ~/.claude 下的文件，
+// 免得这个接口变成任意文件读取
+func imagePathAllowed(real string) bool {
+	abs := filepath.Clean(real)
+	if strings.HasPrefix(abs, "/tmp/claude-") {
+		return true
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if strings.HasPrefix(abs, filepath.Join(home, ".claude")+"/") {
+			return true
+		}
+	}
+	return false
 }

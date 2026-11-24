@@ -127,7 +127,12 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 		}
 		path = p
 	}
-	img, err := extractImage(path, idx)
+	var img imagePayload
+	if r.URL.Query().Get("file") == "1" {
+		img, err = extractFileImage(path, idx)
+	} else {
+		img, err = extractImage(path, idx)
+	}
 	if err != nil {
 		writeErr(w, 404, err.Error())
 		return

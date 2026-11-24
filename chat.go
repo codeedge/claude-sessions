@@ -186,16 +186,25 @@ func (m *chatManager) send(req chatSendRequest) error {
 	}
 
 	s := m.session(req.SessionID)
-	s.mu.Lock()
-	if s.running {
-		s.mu.Unlock()
-		return fmt.Errorf("上一轮还在进行中")
-	}
-	s.mu.Unlock()
 
 	// /clear、/subtask 这类是 CLI 客户端自己实现的命令，print 模式不会执行，
 	// 这里按同样的语义接管。
 	if cmd, arg := localSlash(req.Text); cmd != "" {
+		// /btw 就是「不打断当前这一轮」问个问题，所以不受 running 限制
+		if cmd == "btw" {
+			if arg == "" {
+				return fmt.Errorf("用法：/btw <问题>")
+			}
+			return m.startBtw(req, arg)
+		}
+
+		s.mu.Lock()
+		busy := s.running
+		s.mu.Unlock()
+		if busy {
+			return fmt.Errorf("上一轮还在进行中")
+		}
+
 		switch cmd {
 		case "clear":
 			return errClearRequested
@@ -207,6 +216,13 @@ func (m *chatManager) send(req chatSendRequest) error {
 			}
 			return m.startSubtask(req, arg)
 		}
+	}
+
+	s.mu.Lock()
+	busy := s.running
+	s.mu.Unlock()
+	if busy {
+		return fmt.Errorf("上一轮还在进行中")
 	}
 
 	cwd := req.CWD
@@ -480,16 +496,26 @@ func localSlash(text string) (cmd, arg string) {
 	head, rest, _ := strings.Cut(t, " ")
 	name := strings.TrimPrefix(strings.TrimSpace(head), "/")
 	switch name {
-	case "clear", "compact", "subtask", "model", "config", "resume", "exit", "quit":
+	case "clear", "compact", "subtask", "btw", "model", "config", "resume", "exit", "quit":
 		return name, strings.TrimSpace(rest)
 	}
 	return "", ""
 }
 
-// startSubtask 在后台跑一个带着当前上下文的子任务。
-// CLI 的 /subtask 只是在同一个会话里 fork 一个子代理，不会多出独立会话，
-// 所以这里用 --fork-session 复制上下文、再 --no-session-persistence 让它跑完不落盘。
+// startSubtask 在后台跑一个带着当前上下文的子任务（面板里能看到，不产生会话）。
 func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
+	return m.runForked(req, task, "subtask", true)
+}
+
+// startBtw 回答一个旁注问题：同样带着上下文，但连记录都不留，纯临时回答。
+func (m *chatManager) startBtw(req chatSendRequest, question string) error {
+	return m.runForked(req, question, "btw", false)
+}
+
+// runForked 用 --fork-session 复制当前上下文、加 --no-session-persistence 跑完不落盘，
+// 这样既能在上下文里干活，又不会多出独立会话（CLI 的 /subtask、/btw 都是这个语义）。
+// kind 决定前端拿到的 ui_ 事件名，persist 决定要不要记进 tasks.jsonl。
+func (m *chatManager) runForked(req chatSendRequest, prompt, kind string, persist bool) error {
 	claude := resolveClaude()
 	cwd := usableDir(req.CWD)
 
@@ -527,16 +553,16 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动子任务失败: %w", err)
+		return fmt.Errorf("启动失败: %w", err)
 	}
 
 	started := time.Now().UnixMilli()
-	s.publish(meta("subtask", map[string]any{"id": id, "task": task}))
+	s.publish(meta(kind, map[string]any{"id": id, "task": prompt}))
 
 	go func() {
 		payload, _ := json.Marshal(map[string]any{
 			"type":    "user",
-			"message": map[string]any{"role": "user", "content": task},
+			"message": map[string]any{"role": "user", "content": prompt},
 		})
 		_, _ = stdin.Write(append(payload, '\n'))
 		_ = stdin.Close()
@@ -564,11 +590,13 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 				code = -1
 			}
 		}
-		s.publish(meta("subtask_done", map[string]any{"id": id, "code": code, "text": out.String()}))
-		saveTask(m.stateDir, taskRecord{
-			ID: id, Parent: req.SessionID, Task: task, Code: code,
-			Text: out.String(), StartedAt: started, EndedAt: time.Now().UnixMilli(),
-		})
+		s.publish(meta(kind+"_done", map[string]any{"id": id, "code": code, "text": out.String()}))
+		if persist {
+			saveTask(m.stateDir, taskRecord{
+				ID: id, Parent: req.SessionID, Task: prompt, Code: code,
+				Text: out.String(), StartedAt: started, EndedAt: time.Now().UnixMilli(),
+			})
+		}
 	}()
 	return nil
 }

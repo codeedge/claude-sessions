@@ -299,6 +299,9 @@ const S = {
   trashSelected: new Set(),
 };
 
+// 旁注（/btw）：答案只显示在这里，不写进会话，刷新就没了
+const BTW = [];
+
 const PAGE_SIZE = 200;
 
 /* ------------------------------------------------------------------ boot */
@@ -1268,6 +1271,7 @@ async function openDetail(id, agent = null, turn = 0) {
   S.agent = agent;
   S.isNew = false;
   S.forkFrom = '';
+  BTW.length = 0;
   S.turns = [];
   S.from = 0;
   S.convQuery = '';
@@ -1734,6 +1738,7 @@ function renderTurns() {
   syncDetailToggle();
   updateJumpNav();
   renderOutline();
+  renderBtw();
 }
 
 // 未加载的轮次区间：占位 + 按需加载按钮
@@ -2710,7 +2715,11 @@ async function sendChat() {
   syncStatusFromComposer();
 
   const d = S.detail || {};
-  if (CHAT.live || !$('#c-stop').hidden) { toast('上一轮还没跑完，等它结束或点停止', true); return; }
+  // /btw 就是用来在后台那一轮还没跑完时插一句话，所以不拦
+  if (!/^\/btw\b/.test(text) && (CHAT.live || !$('#c-stop').hidden)) {
+    toast('上一轮还没跑完，等它结束或点停止', true);
+    return;
+  }
 
   // /branch、/fork 是「把当前对话复制出一条新会话」，网页版直接切过去，
   // 下一条消息用 --fork-session 写进新会话（CLI 里这两个命令本来就是同一件事）
@@ -2734,6 +2743,7 @@ async function sendChat() {
     permissionMode: $('#c-mode').value,
   };
 
+  const isForkedCmd = /^\/(?:subtask|btw)\b/.test(text);
   try {
     const res = await api('/api/chat/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2745,9 +2755,9 @@ async function sendChat() {
       toast('已开新会话');
       return;
     }
-    if (!res.ok) throw new Error('发送失败');
+    if (!res.ok) throw new Error(res.error || '发送失败');
     S.isNew = false;
-    startLiveBubble(text);
+    if (!isForkedCmd) startLiveBubble(text);
   } catch (err) {
     toast('发送失败: ' + err.message, true);
     setComposerValue(text);
@@ -2958,6 +2968,22 @@ async function loadPastSubtasks(id) {
   } catch {}
 }
 
+function renderBtw() {
+  const box = $('#conv');
+  if (!box) return;
+  box.querySelectorAll('.btw-block').forEach((el) => el.remove());
+  for (const b of BTW) {
+    const el = document.createElement('div');
+    el.className = 'btw-block';
+    el.innerHTML = `<div class="btw-head">旁注<span class="btw-q">${esc(b.q)}</span></div>` +
+      (b.a === null
+        ? '<div class="btw-a muted">正在回答…</div>'
+        : `<div class="btw-a">${md(b.a)}</div>`);
+    box.appendChild(el);
+  }
+  if (BTW.length) scrollToBottomSoon();
+}
+
 function handleChatLine(line) {
   let ev;
   try { ev = JSON.parse(line); } catch { return; }
@@ -2968,6 +2994,17 @@ function handleChatLine(line) {
     }
     renderPanelTabs();
     liveAppend(`<div class="live-note">↳ 子任务已在后台启动：${esc(truncate(ev.task || '', 40))}</div>`);
+    return;
+  }
+  if (ev.type === 'ui_btw') {
+    BTW.push({ id: ev.id, q: ev.task || '', a: null });
+    renderBtw();
+    return;
+  }
+  if (ev.type === 'ui_btw_done') {
+    const b = [...BTW].reverse().find((x) => x.a === null);
+    if (b) b.a = ev.text || '（没有回答）';
+    renderBtw();
     return;
   }
   if (ev.type === 'ui_subtask_done') {

@@ -3366,6 +3366,11 @@ function startNewSession(cwd) {
   S.turns = [];
   S.totalTurns = 0;
   S.detail = { id, title: '(新会话)', cwd, project: cwd, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), userMsgs: 0, asstMsgs: 0 };
+  // 新会话不该继承上一条会话的子任务/子代理/shell/旁注
+  FORKS.length = 0;
+  BTW.length = 0;
+  closePanel();
+  renderPanelTabs();
   setView('detail');
   $('#d-title').textContent = '(新会话)';
   $('#d-sub').textContent = cwd;

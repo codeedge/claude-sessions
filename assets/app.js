@@ -2537,6 +2537,17 @@ function initComposer() {
         return;
       }
     }
+    // 菜单已关闭时按 Tab：如果输入的就是一个命令名，帮它补上空格
+    if (e.key === 'Tab' && !SLASH.open) {
+      const m = /^\/([A-Za-z0-9:_-]+)$/.exec(ta.value);
+      if (m) {
+        e.preventDefault();
+        ta.value = '/' + m[1] + ' ';
+        ta.selectionStart = ta.selectionEnd = ta.value.length;
+        paintComposerHighlight();
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       sendChat();

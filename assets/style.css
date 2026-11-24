@@ -849,6 +849,13 @@ dialog {
 dialog::backdrop { background: rgba(0, 0, 0, .62); }
 dialog h2 { margin: 0 0 8px; font-size: 15px; }
 dialog p { margin: 0 0 18px; color: var(--fg-dim); font-size: 13px; white-space: pre-wrap; }
+.cf-check {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 12px 0 4px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer;
+}
+.cf-check input { margin-top: 2px; accent-color: var(--danger); cursor: pointer; }
+.cf-check:hover { color: var(--fg); }
+
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* responsive */

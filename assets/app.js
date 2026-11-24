@@ -102,13 +102,32 @@ function toastUndo(msg, label, fn) {
   toast._t = setTimeout(() => { el.hidden = true; }, 9000);
 }
 
-function confirmDialog(title, body, okLabel = '确定') {
+// opts.check：给了就先渲染一个勾选框，勾上之前「确定」是禁用的（防止手滑删掉东西）
+function confirmDialog(title, body, okLabel = '确定', opts = {}) {
   const dlg = $('#confirm-dialog');
+  const ok = $('#cf-ok');
+  const wrap = $('#cf-check-wrap');
+  const box = $('#cf-check');
   $('#cf-title').textContent = title;
   $('#cf-body').textContent = body;
-  $('#cf-ok').textContent = okLabel;
+  ok.textContent = okLabel;
+
+  const needCheck = !!opts.check;
+  wrap.hidden = !needCheck;
+  box.checked = false;
+  if (needCheck) $('#cf-check-label').textContent = opts.check;
+  const sync = () => { ok.disabled = needCheck && !box.checked; };
+  box.onchange = sync;
+  sync();
+
   return new Promise((resolve) => {
-    const onClose = () => { dlg.removeEventListener('close', onClose); resolve(dlg.returnValue === 'ok'); };
+    const onClose = () => {
+      dlg.removeEventListener('close', onClose);
+      box.onchange = null;
+      ok.disabled = false;
+      wrap.hidden = true;
+      resolve(dlg.returnValue === 'ok');
+    };
     dlg.addEventListener('close', onClose);
     dlg.returnValue = 'cancel';
     dlg.showModal();
@@ -1925,6 +1944,7 @@ async function deleteTurnBlock(uuid) {
     `这一轮${preview ? '（用户：' + preview + '）' : ''}会从会话文件里整轮删掉，` +
     '它的助手回复和工具调用也一起删，删完消息链会自动接上，CLI 里还能继续 resume。',
     '删除这一块',
+    { check: '我知道这一块删掉就找不回来了' },
   );
   if (!ok) return;
   try {

@@ -459,22 +459,21 @@ body[data-view="trash"] .sidebar { display: none; }
 .detail-meta .k { color: var(--fg-faint); }
 .subagent-btn { padding: 2px 9px; font-size: 11.5px; border-radius: 20px; }
 
-/* 三列：大纲 + 正文 + 右侧面板。
-   右列是 auto：面板没打开时宽度为 0，打开时占固定宽度，
-   所以正文宽度只在需要时让一点，不会被面板盖住。 */
+/* 三列：左留白 + 正文 + 右留白，正文正好在页面正中；
+   大纲占左边那一列，因此看起来在正文左侧 */
 .detail-body {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) auto;
+  grid-template-columns: 200px minmax(0, var(--conv-max)) 200px;
   justify-content: center;
   column-gap: 22px;
   padding: 18px 22px;
   align-items: start;
 }
-body.no-outline .detail-body { grid-template-columns: minmax(0, 1fr) auto; }
+body.no-outline .detail-body { grid-template-columns: minmax(0, var(--conv-max)); justify-content: center; }
 body.no-outline .outline { display: none; }
 
 @media (max-width: 1180px) {
-  .detail-body { grid-template-columns: minmax(0, 1fr); }
+  .detail-body { grid-template-columns: minmax(0, var(--conv-max)); justify-content: center; }
   .outline { display: none; }
 }
 
@@ -1100,28 +1099,14 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .panel-chip.shell .pc-kind { color: var(--accent); }
 .pc-n { color: var(--fg-faint); font-size: 10.5px; }
 
-/* 右侧面板：跟着详情页一起排版，不覆盖正文 */
+/* 右侧抽屉：点下面的标签时从右边滑出来盖住一部分正文 */
 .side-panel {
-  grid-column: 3;
-  /* 贴在详情页头（sticky，高约 64px）下面，别被它盖住 */
-  position: sticky; top: 72px; align-self: start; z-index: 8;
-  width: 380px; max-height: calc(100vh - 88px);
+  position: fixed; right: 0; top: 0; bottom: 0; z-index: 40;
+  width: min(520px, 42vw);
   background: var(--bg-1);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.28);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.side-panel-head { border-radius: 12px 12px 0 0; }
-
-/* 窄屏放不下第三列，退回到覆盖式抽屉 */
-@media (max-width: 1180px) {
-  .side-panel {
-    position: fixed; right: 0; top: 0; bottom: 0; z-index: 40;
-    width: min(560px, 88vw); max-height: none;
-    border-radius: 0; border-left: 1px solid var(--line);
-    box-shadow: -12px 0 40px rgba(0,0,0,.45);
-  }
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 40px rgba(0,0,0,.45);
+  display: flex; flex-direction: column;
 }
 .side-panel[hidden] { display: none !important; }
 .side-panel-head {

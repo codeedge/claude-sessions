@@ -2071,20 +2071,13 @@ function toggleAllDetails() {
 // 详情页右下角的回到顶部 / 回到底部
 // 位置按大纲的实际右边缘算，避免压住大纲文字；大纲隐藏时退回窗口右下角
 function positionJumpNav(nav) {
-  // 右侧面板打开时，跳转按钮要让到面板左边，别盖住它
+  // 抽屉会盖住右下角，打开时把跳转按钮收起来
   const panel = $('#side-panel');
-  const inFlow = panel && !panel.hidden && getComputedStyle(panel).position !== 'fixed';
-  if (inFlow) {
-    const r = panel.getBoundingClientRect();
-    nav.style.right = Math.max(16, Math.round(window.innerWidth - r.left + 12)) + 'px';
-    // 面板占住了右下角，跳转按钮往上挪到输入框上面
-    const comp = $('#composer');
-    const cr = comp ? comp.getBoundingClientRect() : null;
-    nav.style.bottom = cr && cr.height
-      ? Math.max(26, Math.round(window.innerHeight - cr.top + 12)) + 'px'
-      : '26px';
+  if (panel && !panel.hidden) {
+    nav.style.visibility = 'hidden';
     return;
   }
+  nav.style.visibility = '';
   nav.style.right = '16px';
   nav.style.bottom = '26px';
 }

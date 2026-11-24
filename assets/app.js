@@ -406,6 +406,13 @@ function init() {
     if (btn) togglePanel(btn.dataset.panel, btn);
   });
   $('#panel-close').addEventListener('click', closePanel);
+  $('#panel-expand').addEventListener('click', () => {
+    if (!PANEL.agent || !S.detailId) return;
+    const id = S.detailId;
+    const agent = PANEL.agent;
+    closePanel();
+    openDetail(id, agent, 0);
+  });
   $('#d-meta').addEventListener('click', (e) => {
     const agentBtn = e.target.closest('.subagent-btn');
     if (agentBtn) {
@@ -1480,7 +1487,7 @@ async function refreshTail() {
 }
 
 // 会话底部列出子代理和后台 shell，点一下在右侧抽屉里看内容，再点关闭
-const PANEL = { open: null };
+const PANEL = { open: null, agent: null };
 const FORKS = []; // /subtask 起的后台分支任务
 
 function renderPanelTabs() {
@@ -1553,6 +1560,8 @@ async function togglePanel(key, btn) {
 
   const [kind, id] = key.split(':');
   const d = S.detail || {};
+  PANEL.agent = kind === 'agent' ? id : null;
+  $('#panel-expand').hidden = kind !== 'agent';
 
   if (kind === 'main') {
     closePanel();

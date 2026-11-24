@@ -1609,7 +1609,27 @@ async function togglePanel(key, btn) {
     const r = await api(`/api/sessions/${encodeURIComponent(d.id)}?agent=${encodeURIComponent(id)}&from=0&count=200`);
     const turns = r.turns || [];
     title.textContent = `子代理 · ${r.agentType || ''} · ${r.totalTurns || turns.length} 轮`;
-    body.innerHTML = turns.map((t) => turnHTML(t)).join('') || '<div class="pick-empty">这个子代理没有内容</div>';
+    // fork 出来的子代理会把父会话历史整段继承下来，默认折叠，避免一进来全是旧内容
+    let inherited = 0;
+    let own = 0;
+    const isInherited = (t) => {
+      const p = (t.prompt || '') + '\n' + (t.command || '');
+      return p.includes('<fork-boilerplate>') || p.includes('You are a worker fork') ||
+        p.includes('inherited reference') || p.includes('This call started a fork');
+    };
+    const parts = turns.map((t) => {
+      if (isInherited(t)) { inherited++; return `<div data-inherited>${turnHTML(t)}</div>`; }
+      own++;
+      return turnHTML(t);
+    });
+    if (inherited) {
+      body.innerHTML = `<details class="inherited-block"><summary>继承自父会话的历史（${inherited} 轮，点开查看）</summary>
+          <div class="inherited-body">${parts.filter((_, i) => isInherited(turns[i])).join('')}</div>
+        </details>` +
+        turns.map((t, i) => (isInherited(t) ? '' : parts[i])).join('');
+    } else {
+      body.innerHTML = parts.join('') || '<div class="pick-empty">这个子代理没有内容</div>';
+    }
   } catch (err) {
     body.innerHTML = `<div class="pick-empty">${esc(err.message)}</div>`;
   }

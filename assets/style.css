@@ -1148,17 +1148,21 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 }
 .composer-field:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .composer-field textarea {
-  width: 100%; background: transparent !important; border-color: transparent !important;
+  position: relative; z-index: 1; width: 100%; min-height: 40px; resize: none;
+  background: transparent !important; border-color: transparent !important;
+  padding: 10px 12px; line-height: 1.5;
   color: transparent; caret-color: var(--fg);
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
 }
-.composer-field textarea:focus { background: transparent !important; border-color: transparent !important; }
+.composer-field textarea:focus { outline: none; background: transparent !important; border-color: transparent !important; }
 .composer-field textarea::placeholder { color: var(--fg-faint); }
+/* 镜像层：普通文字正常显示，行首 /命令 用强调色加粗。
+   注意这里不要写 color: transparent，否则除命令外全都看不见。 */
 .composer-highlight {
   position: absolute; inset: 0; z-index: 0;
   padding: 10px 12px; border: 1px solid transparent; border-radius: 10px;
-  font: inherit; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-  color: transparent; pointer-events: none; overflow: hidden;
+  font: inherit; font-size: 13.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+  color: var(--fg); pointer-events: none; overflow: hidden;
 }
-.composer-field textarea { position: relative; z-index: 1; background: transparent; }
-.composer-field textarea:focus { background: color-mix(in srgb, var(--bg-1) 92%, transparent); }
 .hl-cmd { color: var(--accent); font-weight: 600; }

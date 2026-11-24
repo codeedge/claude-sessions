@@ -2386,7 +2386,7 @@ function onKeydown(e) {
   }
   if (e.key === 'Escape') {
     if (!$('#hovercard').hidden) { hideHoverCard(); return; }
-    if (typing) { e.target.blur(); return; }
+    if (typing) { if (e.target.id !== 'c-input') e.target.blur(); return; }
     if (document.body.dataset.view === 'detail') { closeDetail(); return; }
     if (document.body.dataset.view === 'trash') { setView('list'); loadSessions(); return; }
     if (S.q) { $('#search').value = ''; onSearchInput(); }
@@ -2482,17 +2482,31 @@ function hideSlashMenu() {
   }
 }
 
-function applySlash(name) {
+// 输入框高度跟随内容；内容没超上限时不要出滚动条
+const COMPOSER_MAX = 200;
+function resizeComposer() {
   const ta = $('#c-input');
-  // 去掉 <任务> 这类占位符，只留命令本身
-  const clean = name.replace(/\s*<[^>]*>/g, '').trim();
-  ta.value = '/' + clean + ' ';
+  if (!ta) return;
+  ta.style.height = 'auto';
+  const h = ta.scrollHeight;
+  ta.style.height = Math.min(h, COMPOSER_MAX) + 'px';
+  ta.style.overflowY = h > COMPOSER_MAX ? 'auto' : 'hidden';
+}
+
+// 把命令名填进输入框（补一个空格，光标停在空格后）
+function fillCommand(name) {
+  const ta = $('#c-input');
+  ta.value = '/' + name + ' ';
   ta.selectionStart = ta.selectionEnd = ta.value.length;
   hideSlashMenu();
   paintComposerHighlight();
   ta.focus();
-  ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+  resizeComposer();
+}
+
+function applySlash(name) {
+  // 去掉 <任务> 这类占位符，只留命令本身
+  fillCommand(name.replace(/\s*<[^>]*>/g, '').trim());
 }
 
 // 输入框里的 /命令 高亮：textarea 文字透明，底下放一层同样排版的镜像
@@ -2530,7 +2544,7 @@ function initComposer() {
     if (SLASH.open && SLASH.items.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); SLASH.idx = (SLASH.idx + 1) % SLASH.items.length; renderSlashMenu(); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); SLASH.idx = (SLASH.idx - 1 + SLASH.items.length) % SLASH.items.length; renderSlashMenu(); return; }
-      if (e.key === 'Escape') { e.preventDefault(); hideSlashMenu(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hideSlashMenu(); return; }
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
         e.preventDefault();
         applySlash(SLASH.items[SLASH.idx].name);
@@ -2538,13 +2552,11 @@ function initComposer() {
       }
     }
     // 菜单已关闭时按 Tab：如果输入的就是一个命令名，帮它补上空格
-    if (e.key === 'Tab' && !SLASH.open) {
+    if (e.key === 'Tab') {
       const m = /^\/([A-Za-z0-9:_-]+)$/.exec(ta.value);
       if (m) {
         e.preventDefault();
-        ta.value = '/' + m[1] + ' ';
-        ta.selectionStart = ta.selectionEnd = ta.value.length;
-        paintComposerHighlight();
+        fillCommand(m[1]);
         return;
       }
     }
@@ -2558,9 +2570,14 @@ function initComposer() {
     const btn = e.target.closest('[data-slash]');
     if (btn) applySlash(btn.dataset.slash);
   });
+  ta.addEventListener('scroll', () => {
+    const back = $('#c-highlight');
+    if (!back) return;
+    back.scrollTop = ta.scrollTop;
+    back.scrollLeft = ta.scrollLeft;
+  });
   ta.addEventListener('input', () => {
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    resizeComposer();
     updateSlashMenu();
     paintComposerHighlight();
   });
@@ -2684,7 +2701,8 @@ async function sendChat() {
 
   const d = S.detail || {};
   ta.value = '';
-  ta.style.height = 'auto';
+  paintComposerHighlight();
+  resizeComposer();
 
   const body = {
     sessionId: S.detailId,

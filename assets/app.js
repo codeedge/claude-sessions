@@ -1662,6 +1662,7 @@ async function renderPanelBody() {
 
   // 子代理：取它的对话渲染
   title.textContent = '子代理';
+  IMG_CTX = { sid: d.id, agent: id };
   try {
     const r = await api(`/api/sessions/${encodeURIComponent(d.id)}?agent=${encodeURIComponent(id)}&from=0&count=200`);
     const turns = r.turns || [];
@@ -1689,6 +1690,8 @@ async function renderPanelBody() {
     }
   } catch (err) {
     body.innerHTML = `<div class="pick-empty">${esc(err.message)}</div>`;
+  } finally {
+    IMG_CTX = null;
   }
 }
 
@@ -1900,13 +1903,18 @@ function closeImageViewer() {
 }
 
 // 会话里的图片：按需向服务端要，滚动到可见时才加载
+// 渲染图片地址时用哪个会话/子代理：默认是当前详情页。
+// 右侧抽屉里看子代理记录时要临时指到那个 agent 的文件，否则会取错图。
+let IMG_CTX = null;
+
 function imgHTML(media, index) {
-  if (index === undefined || index === null || !S.detailId) {
+  const ctx = IMG_CTX || { sid: S.detailId, agent: S.agent };
+  if (index === undefined || index === null || !ctx.sid) {
     return `<div class="imgblk">[图片 ${esc(media || '')}]</div>`;
   }
   const qs = new URLSearchParams({ i: String(index) });
-  if (S.agent) qs.set('agent', S.agent);
-  const src = `/api/sessions/${encodeURIComponent(S.detailId)}/image?` + qs.toString();
+  if (ctx.agent) qs.set('agent', ctx.agent);
+  const src = `/api/sessions/${encodeURIComponent(ctx.sid)}/image?` + qs.toString();
   const n = index + 1;
   return `<button class="turn-img" type="button" data-img="${esc(src)}" data-num="${n}" title="第 ${n} 张 · 点击放大">
     <span class="turn-img-no">#${n}</span>

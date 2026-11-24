@@ -254,6 +254,11 @@ func (m *chatManager) send(req chatSendRequest) error {
 	if mode == "" || mode == "ask" {
 		mode = "default" // 弹窗由 --permission-prompt-tool 接管
 	}
+	// Claude Code 以 root 运行时根本不允许跳过权限，提前拦下来给个明确提示，
+	// 否则进程一起来就退出，前端只看到"什么都没发生"
+	if mode == "bypassPermissions" && os.Geteuid() == 0 {
+		return fmt.Errorf("以 root 运行时不支持「跳过全部权限」，请把权限模式换成「自动接受编辑」")
+	}
 	args = append(args, "--permission-mode", mode)
 
 	// 用 claude 自己的 --permission-prompt-tool：把审批请求转给我们内置的 MCP server
@@ -308,10 +313,6 @@ func (m *chatManager) send(req chatSendRequest) error {
 		cancel()
 		return fmt.Errorf("启动 claude 失败: %w", err)
 	}
-	if req.ForkFrom != "" {
-		// 分支关系自己记一份，索引里优先用它
-		saveFork(m.stateDir, req.SessionID, req.ForkFrom)
-	}
 
 	s.publish(meta("started", map[string]any{"dir": cwd, "model": req.Model, "effort": req.Effort, "mode": req.PermissionMode}))
 
@@ -362,6 +363,10 @@ func (m *chatManager) send(req chatSendRequest) error {
 			if ee, ok := err.(*exec.ExitError); ok {
 				code = ee.ExitCode()
 			}
+		}
+		if code == 0 && req.ForkFrom != "" {
+			// 分支关系自己记一份，索引里优先用它（真跑成功了才记）
+			saveFork(m.stateDir, req.SessionID, req.ForkFrom)
 		}
 		s.publish(meta("exit", map[string]any{"code": code}))
 		if err != nil && code != 0 {

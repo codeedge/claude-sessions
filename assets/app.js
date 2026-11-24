@@ -274,7 +274,7 @@ const CHAT = {
 };
 
 // 服务端下发的默认选项（模型/强度/权限）
-const DEFAULTS = { model: '', effort: '', permissionMode: '', cli: {}, overrides: {} };
+const DEFAULTS = { model: '', effort: '', permissionMode: '', cli: {}, overrides: {}, root: false };
 
 const EFFORT_LEVELS = [
   ['', '默认强度'], ['low', '低'], ['medium', '中'], ['high', '高'], ['xhigh', '很高'], ['max', '最高'],
@@ -1446,6 +1446,18 @@ function stopLiveWatch() {
   }
 }
 
+// 新会话/新分支的第一轮：等它进索引（服务端会在进程退出时重扫），再整页载入
+async function loadFirstTurn(id) {
+  for (let i = 0; i < 10; i++) {
+    if (S.detailId !== id) return;
+    try {
+      const d = await api(`/api/sessions/${encodeURIComponent(id)}?from=0&count=5`);
+      if (d && d.turns && d.turns.length) { await openDetail(id); return; }
+    } catch { /* 还没扫到，继续等 */ }
+    await new Promise((r) => setTimeout(r, 800));
+  }
+}
+
 function startLiveWatch(id) {
   stopLiveWatch();
   S.liveRev = 0;
@@ -2516,13 +2528,21 @@ function onKeydown(e) {
 
 init();
 
-// Deep link: #/session/<id>?agent=<agentId>&turn=<n>
-(() => {
+function routeFromHash() {
   const m = location.hash.match(/^#\/session\/([^?/]+)(?:\?(.*))?$/);
-  if (!m) return;
+  if (!m) {
+    if (document.body.dataset.view === 'detail') closeDetail();
+    return;
+  }
+  const id = decodeURIComponent(m[1]);
+  if (id === S.detailId && !S.isNew) return;
   const params = new URLSearchParams(m[2] || '');
-  openDetail(decodeURIComponent(m[1]), params.get('agent') || null, Number(params.get('turn')) || 0);
-})();
+  openDetail(id, params.get('agent') || null, Number(params.get('turn')) || 0);
+}
+
+// 前进/后退、手动改地址时跟着走
+window.addEventListener('hashchange', routeFromHash);
+routeFromHash();
 
 /* ------------------------------------------------------------------ 聊天 */
 
@@ -2740,7 +2760,23 @@ function applyDefaultsToComposer() {
     m.value = '';
   }
   e.value = DEFAULTS.effort || '';
-  p.value = DEFAULTS.permissionMode || 'ask';
+
+  // root 下 Claude Code 不允许 bypassPermissions（进程会直接退出），
+  // 所以把这一项禁用，默认值也换成「自动接受编辑」
+  const bypass = [...p.options].find((o) => o.value === 'bypassPermissions');
+  if (bypass) {
+    bypass.disabled = DEFAULTS.root;
+    bypass.textContent = DEFAULTS.root ? '跳过全部权限（root 下不可用）' : '跳过全部权限';
+  }
+  let want = DEFAULTS.permissionMode || 'ask';
+  if (DEFAULTS.root && want === 'bypassPermissions') {
+    want = 'acceptEdits';
+    if (!DEFAULTS.rootWarned) {
+      DEFAULTS.rootWarned = true;
+      setTimeout(() => toast('以 root 运行，Claude Code 不允许「跳过全部权限」，已改用「自动接受编辑」'), 300);
+    }
+  }
+  p.value = want;
 }
 
 async function loadSettings() {
@@ -2752,6 +2788,7 @@ async function loadSettings() {
     DEFAULTS.cli = r.cli || {};
     DEFAULTS.cliRaw = r.cliRaw || {};
     DEFAULTS.overrides = r.overrides || {};
+    DEFAULTS.root = !!r.root;
     applyDefaultsToComposer();
   } catch {}
 }
@@ -3187,12 +3224,10 @@ function handleChatLine(line) {
     setTimeout(async () => {
       loadHUD(id);
       if (!id || S.detailId !== id) return;
-      try {
-        await refreshTail();
-      } catch {
-        // 新会话此时才刚进索引，整页重载一次
-        try { await openDetail(id); } catch {}
-      }
+      // 新会话/新分支这时候才有第一轮，refreshTail 对空列表是空转的，
+      // 得等索引扫到再整页载入一次
+      if (!S.turns.length) { await loadFirstTurn(id); return; }
+      try { await refreshTail(); } catch {}
     }, 900);
   }
 }

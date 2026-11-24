@@ -26,6 +26,8 @@ type settingsResponse struct {
 	CLIRaw chatDefaults `json:"cliRaw"`
 	// 哪些项是用户自己设过、覆盖了 CLI
 	Overrides chatDefaults `json:"overrides"`
+	// 以 root 跑时 Claude Code 不允许 bypassPermissions，前端据此禁用那一项
+	Root bool `json:"root,omitempty"`
 }
 
 type settingsStore struct {
@@ -122,7 +124,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	if ov.PermissionMode != "" {
 		eff.PermissionMode = ov.PermissionMode
 	}
-	writeJSON(w, 200, settingsResponse{chatDefaults: eff, CLI: cli, CLIRaw: raw, Overrides: ov})
+	writeJSON(w, 200, settingsResponse{chatDefaults: eff, CLI: cli, CLIRaw: raw, Overrides: ov, Root: os.Geteuid() == 0})
 }
 
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +136,11 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	req.Model = strings.TrimSpace(req.Model)
 	req.Effort = strings.TrimSpace(req.Effort)
 	req.PermissionMode = strings.TrimSpace(req.PermissionMode)
+	// root 下这个模式一用就挂，别让它再被存进去
+	if req.PermissionMode == "bypassPermissions" && os.Geteuid() == 0 {
+		writeErr(w, 400, "以 root 运行时不支持「跳过全部权限」，请选「自动接受编辑」")
+		return
+	}
 	if err := s.settings.save(req); err != nil {
 		writeErr(w, 500, "保存失败: "+err.Error())
 		return

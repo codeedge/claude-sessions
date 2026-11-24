@@ -2487,7 +2487,9 @@ function applySlash(name) {
   // 去掉 <任务> 这类占位符，只留命令本身
   const clean = name.replace(/\s*<[^>]*>/g, '').trim();
   ta.value = '/' + clean + ' ';
+  ta.selectionStart = ta.selectionEnd = ta.value.length;
   hideSlashMenu();
+  paintComposerHighlight();
   ta.focus();
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';

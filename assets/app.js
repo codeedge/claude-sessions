@@ -2483,11 +2483,32 @@ function hideSlashMenu() {
 
 function applySlash(name) {
   const ta = $('#c-input');
-  ta.value = '/' + name + ' ';
+  // 去掉 <任务> 这类占位符，只留命令本身
+  const clean = name.replace(/\s*<[^>]*>/g, '').trim();
+  ta.value = '/' + clean + ' ';
   hideSlashMenu();
   ta.focus();
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+}
+
+// 输入框里的 /命令 高亮：textarea 文字透明，底下放一层同样排版的镜像
+function paintComposerHighlight() {
+  const ta = $('#c-input');
+  const back = $('#c-highlight');
+  if (!ta || !back) return;
+  const raw = ta.value;
+  const html = raw
+    .split('\n')
+    .map((line) => {
+      const m = /^(\/[A-Za-z0-9:_-]+)(.*)$/.exec(line);
+      if (m) return `<span class="hl-cmd">${esc(m[1])}</span>${esc(m[2])}`;
+      return esc(line);
+    })
+    .join('\n');
+  back.innerHTML = html + (raw.endsWith('\n') ? ' ' : '');
+  back.scrollTop = ta.scrollTop;
+  back.scrollLeft = ta.scrollLeft;
 }
 
 function initComposer() {
@@ -2527,6 +2548,7 @@ function initComposer() {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
     updateSlashMenu();
+    paintComposerHighlight();
   });
   ta.addEventListener('blur', () => setTimeout(hideSlashMenu, 150));
 }

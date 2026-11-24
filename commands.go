@@ -32,7 +32,7 @@ var builtinCommands = []slashCmd{
 	{"review", "审查当前改动", "builtin"},
 	{"subtask <任务>", "在后台 fork 一个代理执行这个任务（网页版会新建一条子任务会话）", "builtin"},
 	{"branch", "把当前对话分叉成一条新会话，用来试另一条路", "builtin"},
-	{"fork", "把当前会话转成后台任务执行（网页版等同 /subtask）", "builtin"},
+	{"fork", "把当前对话分叉成一条新会话，用来试另一条路（等同 /branch）", "builtin"},
 }
 
 type commandCache struct {

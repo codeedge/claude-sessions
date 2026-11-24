@@ -1140,3 +1140,15 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 }
 .inherited-block > summary:hover { color: var(--fg-dim); }
 .inherited-body { margin-top: 10px; opacity: .75; }
+
+/* 输入框内 /命令 高亮（镜像层） */
+.composer-field { position: relative; flex: 1; min-width: 0; }
+.composer-highlight {
+  position: absolute; inset: 0; z-index: 0;
+  padding: 10px 12px; border: 1px solid transparent; border-radius: 10px;
+  font: inherit; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  color: transparent; pointer-events: none; overflow: hidden;
+}
+.composer-field textarea { position: relative; z-index: 1; background: transparent; }
+.composer-field textarea:focus { background: color-mix(in srgb, var(--bg-1) 92%, transparent); }
+.hl-cmd { color: var(--accent); font-weight: 600; }

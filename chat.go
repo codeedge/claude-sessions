@@ -171,6 +171,7 @@ type chatSendRequest struct {
 	Effort         string `json:"effort"`
 	PermissionMode string `json:"permissionMode"`
 	Resume         bool   `json:"resume"`
+	ForkFrom       string `json:"forkFrom"` // 从这条会话分出一条新分支
 }
 
 func (m *chatManager) send(req chatSendRequest) error {
@@ -246,9 +247,13 @@ func (m *chatManager) send(req chatSendRequest) error {
 		args = append(args, "--mcp-config", mcpCfg)
 	}
 
-	if req.NewSession {
+	switch {
+	case req.ForkFrom != "" && sessionIDRe.MatchString(req.ForkFrom):
+		// 分支：复制父会话的上下文，写到新会话里（/branch、/fork）
+		args = append(args, "--resume", req.ForkFrom, "--fork-session", "--session-id", req.SessionID)
+	case req.NewSession:
 		args = append(args, "--session-id", req.SessionID)
-	} else {
+	default:
 		args = append(args, "--resume", req.SessionID)
 	}
 
@@ -286,6 +291,10 @@ func (m *chatManager) send(req chatSendRequest) error {
 		s.mu.Unlock()
 		cancel()
 		return fmt.Errorf("启动 claude 失败: %w", err)
+	}
+	if req.ForkFrom != "" {
+		// 分支关系自己记一份，索引里优先用它
+		saveFork(m.stateDir, req.SessionID, req.ForkFrom)
 	}
 
 	s.publish(meta("started", map[string]any{"dir": cwd, "model": req.Model, "effort": req.Effort, "mode": req.PermissionMode}))
@@ -594,6 +603,33 @@ func newSessionID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// saveFork 记下「这条分支会话是从哪条会话分出来的」。
+// CLI 的 --fork-session 不写 forkedFrom，而 fork 出来的会话历史里往往还带着
+// 更早的祖先，光靠消息锚点会把父子关系认错（fork 的 fork 尤其明显）。
+func saveFork(stateDir, child, parent string) {
+	if stateDir == "" || child == "" || parent == "" {
+		return
+	}
+	path := filepath.Join(stateDir, "forks.json")
+	m := map[string]string{}
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &m)
+	}
+	m[child] = parent
+	if b, err := json.MarshalIndent(m, "", "  "); err == nil {
+		_ = os.WriteFile(path, b, 0o600)
+	}
+}
+
+// loadForks 读回我们自己记的分支关系（子会话 → 父会话）
+func loadForks(stateDir string) map[string]string {
+	out := map[string]string{}
+	if b, err := os.ReadFile(filepath.Join(stateDir, "forks.json")); err == nil {
+		_ = json.Unmarshal(b, &out)
+	}
+	return out
 }
 
 // taskRecord 是一次 /subtask 的记录。子任务本身不落盘（跟 CLI 一样，

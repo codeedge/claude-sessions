@@ -82,7 +82,7 @@ func scheduleScavenge() {
 //  2. 压缩后继续（continued from a previous conversation）的会话从中间接上，
 //     首条 uuid 是新生成的 summary，但这段历史在原会话里也能找到，
 //     所以扫描时撞见"别人的锚点"就说明那个会话是从当前文件分叉出去的
-func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev map[string]*SessionInfo) {
+func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev map[string]*SessionInfo, forks map[string]string) {
 	// 未变化的会话在 out 里直接复用了 prev 的指针，reset 之前先把旧结论抄下来
 	prevFork := make(map[string]string, len(prev))
 	for id, s := range prev {
@@ -93,6 +93,17 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 
 	for _, s := range sessions {
 		s.ForkOf, s.ForkOfTitle, s.ForkCount = "", "", 0
+	}
+
+	// 我们自己记的分支关系最准（CLI 不写 forkedFrom，锚点法会被更早的祖先骗到）
+	pinned := make(map[string]bool, len(forks))
+	for child, parent := range forks {
+		c, p := sessions[child], sessions[parent]
+		if c == nil || p == nil || child == parent {
+			continue
+		}
+		c.ForkOf, c.ForkOfTitle = p.ID, p.Title
+		pinned[child] = true
 	}
 
 	pick := func(self string, cands []string) *SessionInfo {
@@ -114,7 +125,7 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 
 	// 线索 0（最准）：记录里直接写了 forkedFrom
 	for id, s := range sessions {
-		if s.parentID == "" {
+		if s.parentID == "" || pinned[id] {
 			continue
 		}
 		if p := sessions[s.parentID]; p != nil && p.ID != id {
@@ -126,7 +137,7 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 	// 线索 1（强）：这个文件里出现了别的会话的首条消息，说明那个会话是从这里分叉的
 	for childID, parents := range found {
 		child := sessions[childID]
-		if child == nil {
+		if child == nil || pinned[childID] {
 			continue
 		}
 		if p := pick(childID, parents); p != nil && !child.startTime.IsZero() && !p.startTime.After(child.startTime) {
@@ -137,7 +148,7 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 
 	// 上次的结论先兜底（文件没变就不会重扫，拿不到线索 1）
 	for id, s := range sessions {
-		if s.ForkOf != "" {
+		if s.ForkOf != "" || pinned[id] {
 			continue
 		}
 		if p := sessions[prevFork[id]]; p != nil {
@@ -148,7 +159,7 @@ func linkForks(sessions map[string]*SessionInfo, found map[string][]string, prev
 	// 线索 2（弱）：首条消息 uuid 相同，最早的当源头
 	groups := make(map[string][]*SessionInfo, 64)
 	for _, s := range sessions {
-		if s.ForkOf != "" || s.firstUserUUID == "" {
+		if s.ForkOf != "" || pinned[s.ID] || s.firstUserUUID == "" {
 			continue
 		}
 		groups[s.firstUserUUID] = append(groups[s.firstUserUUID], s)
@@ -438,7 +449,7 @@ func (ix *Index) scanLocked() error {
 		}
 	}
 
-	linkForks(out, takeForkFindings(), prev)
+	linkForks(out, takeForkFindings(), prev, loadForks(ix.app))
 
 	ix.mu.Lock()
 	ix.sessions = out

@@ -1266,6 +1266,8 @@ function setHash(id, agent, turn) {
 async function openDetail(id, agent = null, turn = 0) {
   S.detailId = id;
   S.agent = agent;
+  S.isNew = false;
+  S.forkFrom = '';
   S.turns = [];
   S.from = 0;
   S.convQuery = '';
@@ -2138,6 +2140,7 @@ function exportMd() {
 async function deleteOne() {
   const d = S.detail;
   if (!d) return;
+  if (S.isNew) { toast('这条会话还没写入磁盘，发一条消息之后才能删除'); return; }
   const warn = d.running
     ? '\n注意：该会话的进程还在运行，删除后 CLI 会继续往已移走的副本里写，直到退出。'
     : '';
@@ -2708,6 +2711,16 @@ async function sendChat() {
 
   const d = S.detail || {};
   if (CHAT.live || !$('#c-stop').hidden) { toast('上一轮还没跑完，等它结束或点停止', true); return; }
+
+  // /branch、/fork 是「把当前对话复制出一条新会话」，网页版直接切过去，
+  // 下一条消息用 --fork-session 写进新会话（CLI 里这两个命令本来就是同一件事）
+  const bm = /^\/(?:branch|fork)(?:\s+(.*))?$/.exec(text);
+  if (bm && S.detailId && !S.isNew) {
+    setComposerValue('');
+    startBranch(S.detailId, (bm[1] || '').trim());
+    return;
+  }
+
   setComposerValue('');
 
   const body = {
@@ -2715,6 +2728,7 @@ async function sendChat() {
     text,
     cwd: d.cwd || d.project || '',
     newSession: !!S.isNew,
+    forkFrom: S.forkFrom || '',
     model: $('#c-model').value,
     effort: $('#c-effort').value,
     permissionMode: $('#c-mode').value,
@@ -3221,6 +3235,22 @@ function startNewSession(cwd) {
   startChatStream(id);
   loadChatModels();
   $('#c-input').focus();
+}
+
+// 从当前会话分出一条新分支：界面先切到"新分支"，
+// 发出第一条消息时才真正 fork（--resume 父会话 --fork-session --session-id 新会话）
+function startBranch(parentID, name = '') {
+  const d = S.detail || {};
+  const cwd = d.cwd || d.project || '';
+  const from = parentID || S.detailId;
+  startNewSession(cwd);
+  S.forkFrom = from;
+  S.isNew = true;
+  $('#d-title').textContent = name || '(新分支)';
+  $('#d-meta').innerHTML = `<span><span class="k">新分支</span> 从 <b>${esc(truncate(d.title || from, 28))}</b> 分出来，发出第一条消息后写入磁盘</span>`;
+  $('#conv').innerHTML = `<div class="empty"><h3>新分支${name ? '：' + esc(name) : ''}</h3>
+    <div>它会带着上面那条会话的上下文继续，原会话不受影响</div></div>`;
+  toast('已切到新分支，下一条消息会发在这里');
 }
 
 function initPermissionDialog() {

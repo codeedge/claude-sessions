@@ -1084,7 +1084,7 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 /* 底部面板入口 + 右侧抽屉 */
 .panel-tabs {
   display: flex; flex-wrap: wrap; gap: 6px;
-  margin: 10px 0 4px;
+  margin: 8px 0 0;
 }
 .panel-tabs[hidden] { display: none !important; }
 .panel-chip {

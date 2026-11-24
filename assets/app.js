@@ -425,7 +425,7 @@ function init() {
   $('#img-viewer').addEventListener('click', () => closeImageViewer());
   $('#panel-tabs').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-panel]');
-    if (btn) togglePanel(btn.dataset.panel, btn);
+    if (btn) togglePanel(btn.dataset.panel);
   });
   $('#panel-close').addEventListener('click', closePanel);
   $('#panel-expand').addEventListener('click', () => {
@@ -1522,7 +1522,7 @@ function renderPanelTabs() {
   if (!box) return;
   const subs = (d.subagent ? [] : (d.subagents || []));
   const shells = (d.subagent ? [] : (d.shells || []));
-  if (!subs.length && !shells.length && !FORKS.length) {
+  if (!subs.length && !shells.length && !FORKS.length && !BTW.length) {
     box.hidden = true;
     box.innerHTML = '';
     return;
@@ -1531,6 +1531,14 @@ function renderPanelTabs() {
   const chips = [
     `<button class="panel-chip main${PANEL.open ? '' : ' on'}" data-panel="main" title="当前会话">● main</button>`,
   ];
+  for (const b of BTW) {
+    const state = b.a === null ? '回答中' : '已答';
+    chips.push(`<button class="panel-chip btw" data-panel="btw:${esc(b.id)}" title="旁注：${esc(b.q)}">
+        <span class="pc-kind">旁注</span>
+        <span class="pc-name">${esc(truncate(b.q, 22))}</span>
+        <span class="pc-n">${esc(state)}</span>
+      </button>`);
+  }
   for (const f of FORKS) {
     const secs = f.status === 'running' ? ((Date.now() - f.startedAt) / 1000).toFixed(0) + 's' : '结束';
     chips.push(`<button class="panel-chip fork${f.status === 'running' ? ' running' : ''}" data-panel="fork:${esc(f.id)}" title="子任务：${esc(f.task)}">
@@ -1567,21 +1575,35 @@ function closePanel() {
   const p = $('#side-panel');
   if (p) p.hidden = true;
   document.querySelectorAll('.panel-chip.on').forEach((el) => el.classList.remove('on'));
+  updateJumpNav();
 }
 
-async function togglePanel(key, btn) {
+function togglePanel(key) {
   if (PANEL.open === key) {
     closePanel();
     return;
   }
-  PANEL.open = key;
-  document.querySelectorAll('.panel-chip.on').forEach((el) => el.classList.remove('on'));
-  if (btn) btn.classList.add('on');
+  openPanel(key);
+}
 
+// 打开右侧面板并切到 key 对应的内容（chip 高亮跟着走）
+function openPanel(key) {
+  PANEL.open = key;
   const panel = $('#side-panel');
+  if (panel) panel.hidden = false;
+  document.querySelectorAll('.panel-chip.on').forEach((el) => el.classList.remove('on'));
+  const btn = document.querySelector(`.panel-chip[data-panel="${CSS.escape(key)}"]`);
+  if (btn) btn.classList.add('on');
+  renderPanelBody();
+  updateJumpNav();
+}
+
+async function renderPanelBody() {
+  const key = PANEL.open;
+  if (!key) return;
   const body = $('#panel-body');
   const title = $('#panel-title');
-  panel.hidden = false;
+  if (!body || !title) return;
   body.innerHTML = '<div class="pick-empty">加载中…</div>';
 
   const [kind, id] = key.split(':');
@@ -1591,6 +1613,17 @@ async function togglePanel(key, btn) {
 
   if (kind === 'main') {
     closePanel();
+    return;
+  }
+
+  if (kind === 'btw') {
+    const b = BTW.find((x) => x.id === id);
+    title.textContent = '旁注（不影响当前会话）';
+    if (!b) { body.innerHTML = '<div class="pick-empty">找不到这条旁注</div>'; return; }
+    body.innerHTML = `<div class="panel-sec"><div class="panel-label">问题</div>
+        <div class="btw-q">${esc(b.q)}</div></div>
+      <div class="panel-sec"><div class="panel-label">回答</div>
+        ${b.a === null ? '<div class="btw-a muted">正在回答…</div>' : `<div class="btw-a">${md(b.a)}</div>`}</div>`;
     return;
   }
 
@@ -1757,7 +1790,6 @@ function renderTurns() {
   syncDetailToggle();
   updateJumpNav();
   renderOutline();
-  renderBtw();
 }
 
 // 未加载的轮次区间：占位 + 按需加载按钮
@@ -2039,8 +2071,22 @@ function toggleAllDetails() {
 // 详情页右下角的回到顶部 / 回到底部
 // 位置按大纲的实际右边缘算，避免压住大纲文字；大纲隐藏时退回窗口右下角
 function positionJumpNav(nav) {
-  // 大纲在左边，跳转按钮固定落在窗口右侧即可
+  // 右侧面板打开时，跳转按钮要让到面板左边，别盖住它
+  const panel = $('#side-panel');
+  const inFlow = panel && !panel.hidden && getComputedStyle(panel).position !== 'fixed';
+  if (inFlow) {
+    const r = panel.getBoundingClientRect();
+    nav.style.right = Math.max(16, Math.round(window.innerWidth - r.left + 12)) + 'px';
+    // 面板占住了右下角，跳转按钮往上挪到输入框上面
+    const comp = $('#composer');
+    const cr = comp ? comp.getBoundingClientRect() : null;
+    nav.style.bottom = cr && cr.height
+      ? Math.max(26, Math.round(window.innerHeight - cr.top + 12)) + 'px'
+      : '26px';
+    return;
+  }
   nav.style.right = '16px';
+  nav.style.bottom = '26px';
 }
 
 function updateJumpNav() {
@@ -3023,22 +3069,6 @@ async function loadPastSubtasks(id) {
   } catch {}
 }
 
-function renderBtw() {
-  const box = $('#conv');
-  if (!box) return;
-  box.querySelectorAll('.btw-block').forEach((el) => el.remove());
-  for (const b of BTW) {
-    const el = document.createElement('div');
-    el.className = 'btw-block';
-    el.innerHTML = `<div class="btw-head">旁注<span class="btw-q">${esc(b.q)}</span></div>` +
-      (b.a === null
-        ? '<div class="btw-a muted">正在回答…</div>'
-        : `<div class="btw-a">${md(b.a)}</div>`);
-    box.appendChild(el);
-  }
-  if (BTW.length) scrollToBottomSoon();
-}
-
 function handleChatLine(line) {
   let ev;
   try { ev = JSON.parse(line); } catch { return; }
@@ -3052,14 +3082,18 @@ function handleChatLine(line) {
     return;
   }
   if (ev.type === 'ui_btw') {
-    BTW.push({ id: ev.id, q: ev.task || '', a: null });
-    renderBtw();
+    BTW.unshift({ id: ev.id, q: ev.task || '', a: null });
+    if (BTW.length > 20) BTW.length = 20;
+    renderPanelTabs();
+    // 旁注本来就该在旁边看，起了就直接翻到那一页
+    openPanel(`btw:${ev.id}`);
     return;
   }
   if (ev.type === 'ui_btw_done') {
-    const b = [...BTW].reverse().find((x) => x.a === null);
+    const b = BTW.find((x) => x.id === ev.id) || BTW.find((x) => x.a === null);
     if (b) b.a = ev.text || '（没有回答）';
-    renderBtw();
+    renderPanelTabs();
+    if (PANEL.open && PANEL.open.startsWith('btw:')) renderPanelBody();
     return;
   }
   if (ev.type === 'ui_subtask_done') {

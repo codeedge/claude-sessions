@@ -115,6 +115,9 @@ claude-sessions scan                 # 只扫描并打印统计
 - **对话状态条**：输入区上方实时显示模型、强度、权限模式，以及本轮 in/out token、耗时、花费、上下文占比
 - **在网页里继续对话**：详情页底部有输入框，回车发送；流式输出文字/思考/工具调用，可随时停止
   - 顶部可选模型、思考强度、权限模式；默认值在左下角「设置」里配
+  - 权限模式默认跟随 CLI：`~/.claude/settings.json` 没写 `permissions.defaultMode` 时
+    就是 **auto**（跟 CLI 一致）；以 root 运行时 Claude Code 不允许 `bypassPermissions`，
+    这一项会被禁用
   - `/clear` 会开一条新会话；`/branch`（`/fork` 是同义词）把当前对话复制成一条新分支并切过去，
     下一条消息用 `--fork-session` 写进新会话，列表里它挂在原会话下面、标「分支」；
     `/compact`、`/model` 这类纯客户端命令在网页版不支持，会提示去终端执行

@@ -2933,7 +2933,7 @@ async function stopChat() {
 
 // 输入区上方的状态条：模型 / 强度 / 权限 / 本轮用量
 function modeLabel(v) {
-  return { ask: '每次询问权限', default: '默认权限', acceptEdits: '自动接受编辑', plan: '只读（规划）', bypassPermissions: '跳过全部权限' }[v] || v || '默认权限';
+  return { auto: '自动（auto）', ask: '每次询问权限', default: '默认权限', acceptEdits: '自动接受编辑', plan: '只读（规划）', bypassPermissions: '跳过全部权限' }[v] || v || '自动（auto）';
 }
 function effortLabel(v) {
   const hit = EFFORT_LEVELS.find(([k]) => k === v);

@@ -107,6 +107,11 @@ func (s *Server) readCLIDefaults() (chatDefaults, chatDefaults) {
 		eff.Effort = strings.TrimSpace(cfg.Env["CLAUDE_CODE_EFFORT_LEVEL"])
 	}
 	eff.PermissionMode = raw.PermissionMode
+	if eff.PermissionMode == "" {
+		// CLI 不给 --permission-mode 时实际是 auto（会话文件里第一条
+		// permission-mode 记录就能看到），这里跟着它走
+		eff.PermissionMode = "auto"
+	}
 	return eff, raw
 }
 

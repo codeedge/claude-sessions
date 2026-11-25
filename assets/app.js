@@ -1574,9 +1574,11 @@ function renderPanelTabs() {
       </button>`);
   }
   for (const a of subs) {
-    chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc(a.description || '')}">
+    // 名字用它的描述（派发时写的那句话），比清一色的 "fork" 有用
+    const label = (a.description || '').trim() || a.agentType || 'agent';
+    chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc((a.description || '') + (a.agentType ? ' · ' + a.agentType : '') + ' · ' + a.msgs + ' 条')}">
         <span class="pc-kind">子代理</span>
-        <span class="pc-name">${esc(a.agentType || 'agent')}</span>
+        <span class="pc-name">${esc(truncate(label, 20))}</span>
         <span class="pc-n">${a.msgs}</span>
       </button>`);
   }

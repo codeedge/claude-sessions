@@ -472,6 +472,7 @@ func readSubagents(sessionDir string) []SubagentRef {
 		return nil
 	}
 	var refs []SubagentRef
+	started := map[string]string{} // 子代理里第一条记录的时间，用来按"派发顺序"排
 	for _, f := range files {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
 			continue
@@ -479,6 +480,7 @@ func readSubagents(sessionDir string) []SubagentRef {
 		id := strings.TrimSuffix(f.Name(), ".jsonl")
 		path := filepath.Join(subDir, f.Name())
 		ref := SubagentRef{ID: id, Path: path}
+		started[id] = firstTimestamp(path)
 
 		metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
 		if b, err := os.ReadFile(metaPath); err == nil {
@@ -499,7 +501,21 @@ func readSubagents(sessionDir string) []SubagentRef {
 		}
 		refs = append(refs, ref)
 	}
-	sort.Slice(refs, func(i, j int) bool { return refs[i].ID < refs[j].ID })
+	// 按派发顺序排（老的在前）。时间戳是 ISO 字符串，直接按字典序比较即可；
+	// 拿不到时间的（很老的文件）排到最后
+	sort.Slice(refs, func(i, j int) bool {
+		a, b := started[refs[i].ID], started[refs[j].ID]
+		if a != b {
+			if a == "" {
+				return false
+			}
+			if b == "" {
+				return true
+			}
+			return a < b
+		}
+		return refs[i].ID < refs[j].ID
+	})
 	return refs
 }
 
@@ -1242,4 +1258,29 @@ func (ix *Index) Purge(ids []string) ([]string, map[string]string) {
 		done = append(done, id)
 	}
 	return done, errs
+}
+
+// firstTimestamp 读文件开头，拿第一条带 timestamp 的记录的时间
+func firstTimestamp(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	br := bufio.NewReaderSize(f, 32<<10)
+	for i := 0; i < 60; i++ {
+		line, err := br.ReadBytes('\n')
+		if bytes.Contains(line, []byte(`"timestamp"`)) {
+			var rec struct {
+				TS string `json:"timestamp"`
+			}
+			if json.Unmarshal(bytes.TrimSpace(line), &rec) == nil && rec.TS != "" {
+				return rec.TS
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return ""
 }

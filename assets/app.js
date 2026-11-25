@@ -1453,13 +1453,14 @@ function stopLiveWatch() {
 
 // 新会话/新分支的第一轮：等它进索引（服务端会在进程退出时重扫），再整页载入
 async function loadFirstTurn(id) {
-  for (let i = 0; i < 10; i++) {
+  // 新会话的第一轮要等进程退出 + 索引重扫，图大的时候可能要几十秒
+  for (let i = 0; i < 25; i++) {
     if (S.detailId !== id) return;
     try {
       const d = await api(`/api/sessions/${encodeURIComponent(id)}?from=0&count=5`);
       if (d && d.turns && d.turns.length) { await openDetail(id); return; }
     } catch { /* 还没扫到，继续等 */ }
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 1200));
   }
 }
 
@@ -1536,6 +1537,14 @@ async function refreshTail() {
   else main.scrollTop = keep;
   syncDetailToggle();
   updateJumpNav();
+  dropLiveBubble();
+}
+
+// 真内容已经渲染好了，就把这一轮结束时的临时气泡删掉
+function dropLiveBubble() {
+  const els = document.querySelectorAll('#conv .live-turn');
+  els.forEach((el) => el.remove());
+  if (CHAT.live && els.length) CHAT.live = null;
 }
 
 // 会话底部列出子代理和后台 shell，点一下在右侧抽屉里看内容，再点关闭

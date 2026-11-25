@@ -88,7 +88,8 @@ type SessionInfo struct {
 	Size          int64         `json:"size"`
 	ContextTokens int           `json:"contextTokens,omitempty"`
 	ContextLimit  int           `json:"contextLimit,omitempty"`
-	Running       bool          `json:"running"`
+	Running       bool          `json:"running"`           // 有进程在用这个会话（含我们自己的）
+	CLIOpen       bool          `json:"cliOpen,omitempty"` // 终端里还开着一个交互式会话
 	Subagents     []SubagentRef `json:"subagents,omitempty"`
 	ForkOf        string        `json:"forkOf,omitempty"`      // 从哪个会话 fork/branch 出来
 	ForkOfTitle   string        `json:"forkOfTitle,omitempty"` // 来源会话的标题

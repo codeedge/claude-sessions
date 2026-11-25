@@ -1023,6 +1023,10 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .chat-status .cs-ctx.warn { color: var(--warn); }
 .chat-status .cs-ctx.high { color: var(--danger); }
 .chat-status .cs-age { color: var(--fg-dim); }
+.chat-status .cs-cli {
+  color: var(--warn); cursor: help;
+  border-bottom: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);
+}
 .chat-status[hidden] { display: none !important; }
 .chat-status b { color: var(--fg-dim); font-weight: 500; }
 .chat-status .cs-model { color: var(--accent); }

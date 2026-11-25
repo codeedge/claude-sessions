@@ -3120,6 +3120,11 @@ function renderChatStatus() {
   const age = sessionAge();
   if (age) info.push(`<span class="cs-age" title="会话开始于 ${esc(abs(d.createdAt))}">${esc(age)}</span>`);
 
+  // 终端里还开着这个会话：那边不会自动看到网页这边发的内容
+  if (d.cliOpen) {
+    info.push(`<span class="cs-cli" title="终端里的 claude 只在启动时读一次会话文件，网页这里发的消息它看不到。想同步：在终端退出后重新 claude --resume ${esc(d.id)}">终端也开着</span>`);
+  }
+
   // 模型/强度/权限就在下面的下拉里，这里不再重复；只补本轮用量
   if (CHAT.turn && CHAT.turn.out) {
     info.push(`<span class="cs-turn">本轮 <b>${fmtNum(CHAT.turn.in)}</b> in / <b>${fmtNum(CHAT.turn.out)}</b> out</span>`);

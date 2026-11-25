@@ -541,9 +541,10 @@ func (m *chatManager) startSubtask(req chatSendRequest, task string) error {
 	return m.runForked(req, task, "subtask", true)
 }
 
-// startBtw 回答一个旁注问题：同样带着上下文，但连记录都不留，纯临时回答。
+// startBtw 回答一个旁注问题：不写进会话，但问答本身记一份到 tasks.jsonl，
+// 这样刷新页面后还能翻回之前的旁注。
 func (m *chatManager) startBtw(req chatSendRequest, question string) error {
-	return m.runForked(req, question, "btw", false)
+	return m.runForked(req, question, "btw", true)
 }
 
 // runForked 用 --fork-session 复制当前上下文、加 --no-session-persistence 跑完不落盘，
@@ -627,7 +628,7 @@ func (m *chatManager) runForked(req chatSendRequest, prompt, kind string, persis
 		s.publish(meta(kind+"_done", map[string]any{"id": id, "code": code, "text": out.String()}))
 		if persist {
 			saveTask(m.stateDir, taskRecord{
-				ID: id, Parent: req.SessionID, Task: prompt, Code: code,
+				ID: id, Parent: req.SessionID, Kind: kind, Task: prompt, Code: code,
 				Text: out.String(), StartedAt: started, EndedAt: time.Now().UnixMilli(),
 			})
 		}
@@ -699,6 +700,7 @@ func loadForks(stateDir string) map[string]string {
 type taskRecord struct {
 	ID        string `json:"id"`
 	Parent    string `json:"parent"`
+	Kind      string `json:"kind,omitempty"` // subtask | btw（老记录没有这个字段，按 subtask 算）
 	Task      string `json:"task"`
 	Code      int    `json:"code"`
 	Text      string `json:"text"`

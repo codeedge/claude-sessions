@@ -3237,19 +3237,26 @@ function ensureThinkEl() {
 }
 
 // 处理 CLI 的一条 stream-json 事件
-// 把以前跑过的子任务读回来，刷新页面后底部面板里还在
+// 把以前跑过的子任务和旁注读回来，刷新页面后底部标签里还在
 async function loadPastSubtasks(id) {
   try {
     const r = await api(`/api/chat/subtasks/${encodeURIComponent(id)}`);
     if (CHAT.id !== id) return;
     for (const t of (r.tasks || [])) {
+      if (t.kind === 'btw') {
+        if (BTW.some((b) => b.id === t.id)) continue;
+        BTW.push({ id: t.id, q: t.task || '', a: t.text || '', at: t.endedAt || t.startedAt || 0 });
+        continue;
+      }
       if (FORKS.some((f) => f.id === t.id)) continue;
       FORKS.push({
         id: t.id, task: t.task || '', status: 'done',
         startedAt: t.startedAt || 0, text: t.text || '',
       });
     }
-    if (FORKS.length) renderPanelTabs();
+    // 历史旁注按时间倒序排，最新的在前
+    BTW.sort((a, b) => (b.at || 0) - (a.at || 0));
+    if (FORKS.length || BTW.length) renderPanelTabs();
   } catch {}
 }
 
@@ -3266,7 +3273,7 @@ function handleChatLine(line) {
     return;
   }
   if (ev.type === 'ui_btw') {
-    BTW.unshift({ id: ev.id, q: ev.task || '', a: null });
+    BTW.unshift({ id: ev.id, q: ev.task || '', a: null, at: Date.now() });
     if (BTW.length > 20) BTW.length = 20;
     renderPanelTabs();
     // 旁注本来就该在旁边看，起了就直接翻到那一页

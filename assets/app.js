@@ -2999,6 +2999,7 @@ async function sendChat() {
     return;
   }
 
+  const sentAttach = ATTACH.map((a) => ({ ...a }));
   setComposerValue('');
 
   const body = {
@@ -3028,7 +3029,7 @@ async function sendChat() {
     if (!res.ok) throw new Error(res.error || '发送失败');
     clearAttachments();
     S.isNew = false;
-    if (!isForkedCmd) startLiveBubble(text);
+    if (!isForkedCmd) startLiveBubble(text, sentAttach);
   } catch (err) {
     toast('发送失败: ' + err.message, true);
     setComposerValue(text);
@@ -3176,12 +3177,25 @@ function syncStatusFromComposer() {
   renderChatStatus();
 }
 
-function startLiveBubble(userText) {
+function startLiveBubble(userText, attachments = []) {
   const box = $('#conv');
   const wrap = document.createElement('article');
   wrap.className = 'turn live-turn';
+  // 附件立刻显示出来，别等这一轮跑完、会话落盘后才冒出来
+  const shots = attachments.filter((a) => (a.type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(a.name));
+  const files = attachments.filter((a) => !shots.includes(a));
+  const shotHTML = shots.length
+    ? `<div class="turn-images">${shots.map((a, i) => `<span class="turn-img live-img">
+        <span class="turn-img-no">#${i + 1}</span>
+        <img src="data:${esc(a.type || 'image/png')};base64,${a.data}" alt="${esc(a.name)}">
+      </span>`).join('')}</div>`
+    : '';
+  const fileHTML = files.length
+    ? `<div class="live-files">${files.map((a) => `<span class="attach-chip">${esc(truncate(a.name, 24))} · ${esc(fmtSize(a.size))}</span>`).join('')}</div>`
+    : '';
   wrap.innerHTML = `
-    <div class="prompt-box"><span class="lbl">用户</span>${esc(userText)}</div>
+    <div class="prompt-box"><span class="lbl">用户</span>${esc(userText)}${userText ? '' : '<span class="dim">（仅附件）</span>'}</div>
+    ${shotHTML}${fileHTML}
     <div class="live-body"></div>`;
   box.appendChild(wrap);
   CHAT.live = { el: wrap, body: wrap.querySelector('.live-body'), textEl: null, thinkEl: null, tools: new Map() };

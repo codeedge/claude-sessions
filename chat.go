@@ -367,7 +367,11 @@ func (m *chatManager) send(req chatSendRequest) error {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
-			if line == "" || strings.Contains(line, "EnvHttpProxyAgent") {
+			// 这些是 CLI 的启动噪音，跟这一轮没关系，别往气泡里塞红字
+			if line == "" ||
+				strings.Contains(line, "EnvHttpProxyAgent") ||
+				strings.Contains(line, "unrecognized_model") ||
+				strings.Contains(line, "doesn't recognize the model") {
 				continue
 			}
 			s.publish(meta("stderr", map[string]any{"text": line}))

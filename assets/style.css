@@ -1083,6 +1083,35 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .hud .fg15 { color: var(--fg); }
 
 /* 底部面板入口 + 右侧抽屉 */
+/* 附件条：粘贴/拖进来的图片和文件 */
+.attach-strip {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 0 0 8px;
+}
+.attach-strip[hidden] { display: none !important; }
+.attach-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 10px 5px 6px; border-radius: 8px;
+  background: var(--bg-2); border: 1px solid var(--line);
+  font-size: 11.5px; color: var(--fg-dim); max-width: 260px;
+}
+.attach-chip img {
+  width: 34px; height: 34px; object-fit: cover; border-radius: 5px; display: block;
+}
+.attach-chip .ac-icon {
+  width: 34px; height: 34px; border-radius: 5px; display: grid; place-items: center;
+  background: var(--bg-1); border: 1px solid var(--line-soft); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+}
+.attach-chip .ac-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-chip .ac-size { color: var(--fg-faint); }
+.attach-chip .ac-del {
+  border: 0; background: none; color: var(--fg-faint); cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 2px;
+}
+.attach-chip .ac-del:hover { color: var(--danger); }
+.composer.drag-over { outline: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -4px; }
+
 .panel-tabs {
   display: flex; flex-wrap: wrap; gap: 6px;
   margin: 8px 0 0;

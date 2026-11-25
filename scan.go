@@ -702,7 +702,10 @@ func parseTurns(path string) ([]Turn, error) {
 				// 粘贴的图片会单独记一条 "[Image: source: /path/1.png]"，
 				// 图片本身不在 JSONL 里，要把这个文件路径记到当前这一轮上
 				if imgPath, ok := imageSourcePath(ci.Text); ok {
-					if cur >= 0 {
+					// 这条伴生记录基本总是和"内嵌 base64 的那条消息"成对出现，
+					// 已经有内嵌图就不要再记一次，否则同一张图会显示两遍。
+					// 只有在没有内嵌图时（18473451 那种情况）才用它兜底。
+					if cur >= 0 && len(turns[cur].Images) == 0 {
 						media := mediaTypeOfPath(imgPath)
 						turns[cur].Images = append(turns[cur].Images, Block{
 							Kind:       "image",

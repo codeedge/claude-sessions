@@ -321,6 +321,10 @@ const S = {
 // 旁注（/btw）：答案只显示在这里，不写进会话，刷新就没了
 const BTW = [];
 
+// 待发送的附件（粘贴的截图、拖进来的文件）
+const ATTACH = [];
+const ATTACH_MAX_TOTAL = 20 << 20; // 20MB
+
 const PAGE_SIZE = 200;
 
 /* ------------------------------------------------------------------ boot */
@@ -1300,6 +1304,7 @@ async function openDetail(id, agent = null, turn = 0) {
   S.isNew = false;
   S.forkFrom = '';
   BTW.length = 0;
+  clearAttachments();
   S.turns = [];
   S.from = 0;
   S.convQuery = '';
@@ -2669,6 +2674,71 @@ function paintComposerHighlight() {
   back.scrollLeft = ta.scrollLeft;
 }
 
+// ---------------------------------------------------------------- 附件
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || '');
+      resolve(s.slice(s.indexOf(',') + 1));
+    };
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(file);
+  });
+}
+
+async function addAttachments(list) {
+  const files = [...(list || [])];
+  if (!files.length) return;
+  let total = ATTACH.reduce((a, x) => a + x.size, 0);
+  for (const f of files) {
+    if (total + f.size > ATTACH_MAX_TOTAL) {
+      toast('附件总大小超过 ' + fmtSize(ATTACH_MAX_TOTAL), true);
+      break;
+    }
+    if (f.size === 0) continue;
+    try {
+      const data = await fileToBase64(f);
+      ATTACH.push({ name: f.name || ('粘贴的图片-' + (ATTACH.length + 1)), type: f.type || '', size: f.size, data });
+      total += f.size;
+    } catch {
+      toast('读取附件失败: ' + (f.name || ''), true);
+    }
+  }
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const box = $('#attach-strip');
+  if (!box) return;
+  if (!ATTACH.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = ATTACH.map((a, i) => {
+    const isImg = (a.type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(a.name);
+    const ext = (a.name.split('.').pop() || 'file').slice(0, 4);
+    const thumb = isImg
+      ? `<img src="data:${esc(a.type || 'image/png')};base64,${a.data}" alt="">`
+      : `<span class="ac-icon">${esc(ext)}</span>`;
+    return `<span class="attach-chip" title="${esc(a.name)}">
+      ${thumb}
+      <span class="ac-name">${esc(truncate(a.name, 24))}</span>
+      <span class="ac-size">${esc(fmtSize(a.size))}</span>
+      <button class="ac-del" type="button" data-attach-del="${i}" title="移除">✕</button>
+    </span>`;
+  }).join('');
+}
+
+function clearAttachments() {
+  ATTACH.length = 0;
+  renderAttachments();
+}
+
 function initComposer() {
   const modelSel = $('#c-model');
   const effortSel = $('#c-effort');
@@ -2679,6 +2749,20 @@ function initComposer() {
 
   $('#c-send').addEventListener('click', sendChat);
   $('#c-stop').addEventListener('click', stopChat);
+
+  // 附件：按钮选文件、直接粘贴、拖进来，三种都行
+  const picker = $('#c-file');
+  $('#c-attach').addEventListener('click', () => picker.click());
+  picker.addEventListener('change', () => {
+    addAttachments(picker.files);
+    picker.value = '';
+  });
+  $('#attach-strip').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-attach-del]');
+    if (!del) return;
+    ATTACH.splice(Number(del.dataset.attachDel), 1);
+    renderAttachments();
+  });
 
   const ta = $('#c-input');
   ta.addEventListener('keydown', (e) => {
@@ -2717,6 +2801,37 @@ function initComposer() {
     back.scrollTop = ta.scrollTop;
     back.scrollLeft = ta.scrollLeft;
   });
+  ta.addEventListener('paste', (e) => {
+    const cb = e.clipboardData;
+    if (!cb) return;
+    let files = [...(cb.files || [])];
+    if (!files.length) {
+      // 某些平台（比如从截图工具直接粘）只在 items 里给文件
+      files = [...(cb.items || [])]
+        .filter((it) => it.kind === 'file')
+        .map((it) => it.getAsFile())
+        .filter(Boolean);
+    }
+    if (files.length) {
+      e.preventDefault();
+      addAttachments(files);
+    }
+  });
+  const composer = $('#composer');
+  composer.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault();
+    composer.classList.add('drag-over');
+  });
+  composer.addEventListener('dragleave', () => composer.classList.remove('drag-over'));
+  composer.addEventListener('drop', (e) => {
+    const files = [...((e.dataTransfer && e.dataTransfer.files) || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    composer.classList.remove('drag-over');
+    addAttachments(files);
+  });
+
   ta.addEventListener('input', () => {
     resizeComposer();
     updateSlashMenu();
@@ -2865,7 +2980,7 @@ function setComposerValue(v) {
 async function sendChat() {
   const ta = $('#c-input');
   const text = ta.value.trim();
-  if (!text || !S.detailId) return;
+  if ((!text && !ATTACH.length) || !S.detailId) return;
   syncStatusFromComposer();
 
   const d = S.detail || {};
@@ -2889,6 +3004,7 @@ async function sendChat() {
   const body = {
     sessionId: S.detailId,
     text,
+    attachments: ATTACH.map((a) => ({ name: a.name, mediaType: a.type, size: a.size, data: a.data })),
     cwd: d.cwd || d.project || '',
     newSession: !!S.isNew,
     forkFrom: S.forkFrom || '',
@@ -2910,6 +3026,7 @@ async function sendChat() {
       return;
     }
     if (!res.ok) throw new Error(res.error || '发送失败');
+    clearAttachments();
     S.isNew = false;
     if (!isForkedCmd) startLiveBubble(text);
   } catch (err) {

@@ -140,9 +140,16 @@
             <option value="plan">只读（规划）</option>
             <option value="bypassPermissions">跳过全部权限</option>
           </select>
+          <button class="icon-btn" id="c-attach" type="button" title="添加图片或文件（也可以直接粘贴、拖进来）">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              <path d="M20 11.5l-8.2 8.2a4.2 4.2 0 0 1-6-6l8.5-8.5a2.8 2.8 0 0 1 4 4L9.6 17.9a1.4 1.4 0 0 1-2-2l7.5-7.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <input type="file" id="c-file" multiple hidden>
           <span class="composer-hint" id="c-hint">Enter 发送 · Shift+Enter 换行</span>
           <button class="btn danger ghost" id="c-stop" hidden>停止</button>
         </div>
+            <div class="attach-strip" id="attach-strip" hidden></div>
             <div class="slash-menu" id="slash-menu" hidden></div>
             <div class="composer-input">
               <div class="composer-field">

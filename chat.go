@@ -163,19 +163,28 @@ func (s *chatSession) runningState() bool {
 // ------------------------------------------------------------------ 发送
 
 type chatSendRequest struct {
-	SessionID      string `json:"sessionId"`
-	Text           string `json:"text"`
-	CWD            string `json:"cwd"`
-	NewSession     bool   `json:"newSession"`
-	Model          string `json:"model"`
-	Effort         string `json:"effort"`
-	PermissionMode string `json:"permissionMode"`
-	Resume         bool   `json:"resume"`
-	ForkFrom       string `json:"forkFrom"` // 从这条会话分出一条新分支
+	SessionID      string           `json:"sessionId"`
+	Text           string           `json:"text"`
+	CWD            string           `json:"cwd"`
+	NewSession     bool             `json:"newSession"`
+	Model          string           `json:"model"`
+	Effort         string           `json:"effort"`
+	PermissionMode string           `json:"permissionMode"`
+	Resume         bool             `json:"resume"`
+	ForkFrom       string           `json:"forkFrom"`    // 从这条会话分出一条新分支
+	Attachments    []chatAttachment `json:"attachments"` // 粘贴的图片 / 拖进来的文件
+}
+
+// chatAttachment 是前端传上来的一份附件（base64）
+type chatAttachment struct {
+	Name      string `json:"name"`
+	MediaType string `json:"mediaType"`
+	Size      int    `json:"size"`
+	Data      string `json:"data"`
 }
 
 func (m *chatManager) send(req chatSendRequest) error {
-	if strings.TrimSpace(req.Text) == "" {
+	if strings.TrimSpace(req.Text) == "" && len(req.Attachments) == 0 {
 		return fmt.Errorf("消息不能为空")
 	}
 	if req.SessionID == "" {
@@ -317,10 +326,26 @@ func (m *chatManager) send(req chatSendRequest) error {
 	s.publish(meta("started", map[string]any{"dir": cwd, "model": req.Model, "effort": req.Effort, "mode": req.PermissionMode}))
 
 	// 写一条用户消息然后关 stdin：进程跑完这一轮就退出
+	att, attErr := buildAttachments(m.stateDir, req.SessionID, req.Attachments)
+	if attErr != nil {
+		s.mu.Lock()
+		s.running = false
+		s.mu.Unlock()
+		cancel()
+		return attErr
+	}
+	text := req.Text + att.TextSuffix
+	content := any(text)
+	if len(att.Images) > 0 {
+		blocks := []map[string]any{{"type": "text", "text": text}}
+		blocks = append(blocks, att.Images...)
+		content = blocks
+	}
+
 	go func() {
 		payload, _ := json.Marshal(map[string]any{
 			"type":    "user",
-			"message": map[string]any{"role": "user", "content": req.Text},
+			"message": map[string]any{"role": "user", "content": content},
 		})
 		_, _ = stdin.Write(append(payload, '\n'))
 		_ = stdin.Close()

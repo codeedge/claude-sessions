@@ -1694,7 +1694,9 @@ async function renderPanelBody() {
   try {
     const r = await api(`/api/sessions/${encodeURIComponent(d.id)}?agent=${encodeURIComponent(id)}&from=0&count=200`);
     const turns = r.turns || [];
-    title.textContent = `子代理 · ${r.agentType || ''} · ${r.totalTurns || turns.length} 轮`;
+    const sub = (d.subagents || []).find((a) => a.id === id);
+    const label = ((sub && sub.description) || r.agentType || '').trim();
+    title.textContent = `子代理${label ? ' · ' + truncate(label, 22) : ''} · ${r.totalTurns || turns.length} 轮`;
     // fork 出来的子代理会把父会话历史整段继承下来，默认折叠，避免一进来全是旧内容
     let inherited = 0;
     let own = 0;

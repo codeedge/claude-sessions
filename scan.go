@@ -736,10 +736,24 @@ func parseTurns(path string) ([]Turn, error) {
 				imgSeq++
 				imgs = append(imgs, b)
 			}
+			prompt := ci.Text
+			var notes []string
+			// 子任务/fork 子代理的第一条消息 = 一大段 <fork-boilerplate> + 真正的任务。
+			// 把样板文折进 notes，正文只留任务本身，否则打开抽屉只能看到一坨被折叠的样板。
+			if i := strings.Index(prompt, "<fork-boilerplate>"); i >= 0 {
+				if j := strings.Index(prompt[i:], "</fork-boilerplate>"); j > 0 {
+					end := i + j + len("</fork-boilerplate>")
+					notes = append(notes, prompt[i:end])
+					rest := strings.TrimSpace(prompt[end:])
+					rest = strings.TrimSpace(strings.TrimPrefix(rest, "Your directive:"))
+					prompt = rest
+				}
+			}
 			turns = append(turns, Turn{
 				UUID:   rec.UUID,
 				Index:  len(turns) + 1,
-				Prompt: clip(ci.Text, maxBlockText),
+				Prompt: clip(prompt, maxBlockText),
+				Notes:  notes,
 				TS:     ts,
 				Images: imgs,
 			})

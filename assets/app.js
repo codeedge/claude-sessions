@@ -1828,7 +1828,23 @@ function renderTurns() {
   box.innerHTML = parts.join('');
   $('#load-more').hidden = true; // 缺口由占位块负责，底部按钮不再使用
 
-  if (S.convQuery) highlightDOM(box, S.convQuery);
+  if (S.convQuery) {
+    highlightDOM(box, S.convQuery);
+    // 重渲染会丢 open 状态，把当前命中那轮的折叠块重新展开
+    const hit = S.convHits && S.convHits[S.convHitIdx];
+    if (hit) {
+      const el = document.getElementById('t-' + hit.turn);
+      if (el) {
+        for (let i = 0; i < 4; i++) {
+          let opened = 0;
+          el.querySelectorAll('details:not([open])').forEach((d) => {
+            if (d.querySelector('mark.hl')) { d.open = true; opened++; }
+          });
+          if (!opened) break;
+        }
+      }
+    }
+  }
   syncDetailToggle();
   updateJumpNav();
   renderOutline();
@@ -2237,6 +2253,26 @@ async function loadMoreTurns() {
   }
 }
 
+// 把当前这轮里命中位置露出来：折叠块（思考过程/工具输出）默认是收起的，
+// 里面的命中既看不见也没滚动到，看起来就像"搜不到"。
+function revealMatches(q, turnEl) {
+  const box = $('#conv');
+  if (!q || !box) return;
+  clearHighlight(box);
+  highlightDOM(box, q);
+  const scope = turnEl || box;
+  // 折叠块可能嵌套，多开几轮直到没有新的被打开
+  for (let i = 0; i < 4; i++) {
+    let opened = 0;
+    scope.querySelectorAll('details:not([open])').forEach((d) => {
+      if (d.querySelector('mark.hl')) { d.open = true; opened++; }
+    });
+    if (!opened) break;
+  }
+  const first = scope.querySelector('mark.hl');
+  if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
 async function onConvSearch() {
   const q = $('#conv-search').value.trim();
   S.convQuery = q;
@@ -2253,7 +2289,12 @@ async function onConvSearch() {
     const res = await api(`/api/sessions/${encodeURIComponent(S.detailId)}/search?` + qs.toString());
     S.convHits = res.items || [];
     counter.textContent = S.convHits.length ? `${S.convHits.length} 轮` : local ? `${local} 处` : '无';
-    if (S.convHits.length) await jumpToTurn(S.convHits[0].turn);
+    if (S.convHits.length) {
+      await jumpToTurn(S.convHits[0].turn);
+      revealMatches(q, document.getElementById('t-' + S.convHits[0].turn));
+    } else {
+      revealMatches(q);
+    }
   } catch {
     counter.textContent = local ? `${local} 处` : '无';
   }
@@ -2262,7 +2303,9 @@ async function onConvSearch() {
 async function jumpNextHit() {
   if (!S.convHits.length) return;
   S.convHitIdx = (S.convHitIdx + 1) % S.convHits.length;
-  await jumpToTurn(S.convHits[S.convHitIdx].turn);
+  const turn = S.convHits[S.convHitIdx].turn;
+  await jumpToTurn(turn);
+  revealMatches(S.convQuery, document.getElementById('t-' + turn));
   $('#conv-search-count').textContent = `${S.convHitIdx + 1}/${S.convHits.length} 轮`;
 }
 

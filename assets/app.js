@@ -1534,6 +1534,15 @@ async function refreshTail() {
     $('#d-title').textContent = d.title;
   }
   if (d.totalTurns) S.totalTurns = d.totalTurns;
+  // 终端里新起的子代理 / 后台 shell 也要跟着冒出来，不用手动刷新
+  if (S.detail) {
+    const sig = (xs) => (xs || []).map((x) => x.id + ':' + (x.msgs ?? x.status ?? '')).join(',');
+    if (sig(d.subagents) !== sig(S.detail.subagents) || sig(d.shells) !== sig(S.detail.shells)) {
+      S.detail.subagents = d.subagents || [];
+      S.detail.shells = d.shells || [];
+      renderPanelTabs();
+    }
+  }
   S.from = S.turns.length;
   if (atBottom) main.scrollTop = main.scrollHeight;
   else main.scrollTop = keep;

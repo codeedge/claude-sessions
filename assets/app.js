@@ -215,7 +215,7 @@ function md(src) {
 }
 
 /** Wrap every match of q inside text nodes of root with <mark>. */
-function highlightDOM(root, q) {
+function highlightDOM(root, q, opts = {}) {
   const needle = String(q || '').trim().toLowerCase();
   if (!needle || !root) return 0;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -224,6 +224,8 @@ function highlightDOM(root, q) {
       if (!v || !v.trim()) return NodeFilter.FILTER_REJECT;
       const p = node.parentElement;
       if (p && /^(SCRIPT|STYLE|MARK|SUMMARY)$/.test(p.tagName)) return NodeFilter.FILTER_REJECT;
+      // 只高亮指定区域（会话内搜索只扫"问"和"答"，不扫思考过程/工具输出）
+      if (opts.only && (!p || !p.closest(opts.only))) return NodeFilter.FILTER_REJECT;
       return v.toLowerCase().includes(needle) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
@@ -1829,7 +1831,7 @@ function renderTurns() {
   $('#load-more').hidden = true; // 缺口由占位块负责，底部按钮不再使用
 
   if (S.convQuery) {
-    highlightDOM(box, S.convQuery);
+    highlightDOM(box, S.convQuery, { only: CONV_SEARCH_SCOPE });
     // 重渲染会丢 open 状态，把当前命中那轮的折叠块重新展开
     const hit = S.convHits && S.convHits[S.convHitIdx];
     if (hit) {
@@ -2253,13 +2255,16 @@ async function loadMoreTurns() {
   }
 }
 
+// 会话内搜索只扫"用户问的"和"助手正文"，思考过程/工具调用/工具输出都不算
+const CONV_SEARCH_SCOPE = '.prompt-box, .blk-text';
+
 // 把当前这轮里命中位置露出来：折叠块（思考过程/工具输出）默认是收起的，
 // 里面的命中既看不见也没滚动到，看起来就像"搜不到"。
 function revealMatches(q, turnEl) {
   const box = $('#conv');
   if (!q || !box) return;
   clearHighlight(box);
-  highlightDOM(box, q);
+  highlightDOM(box, q, { only: CONV_SEARCH_SCOPE });
   const scope = turnEl || box;
   // 折叠块可能嵌套，多开几轮直到没有新的被打开
   for (let i = 0; i < 4; i++) {
@@ -2281,7 +2286,7 @@ async function onConvSearch() {
   const counter = $('#conv-search-count');
   if (!q) { counter.textContent = ''; S.convHits = []; return; }
 
-  const local = highlightDOM($('#conv'), q);
+  const local = highlightDOM($('#conv'), q, { only: CONV_SEARCH_SCOPE });
   counter.textContent = '…';
   try {
     const qs = new URLSearchParams({ q });

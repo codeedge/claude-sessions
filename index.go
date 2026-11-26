@@ -983,21 +983,27 @@ func (ix *Index) SearchTurns(sessionID, agentID, q string) ([]TurnSearchHit, err
 	}
 	var out []TurnSearchHit
 	for _, t := range turns {
+		// 只搜"问"和"答"：用户输入 + 助手的正文。
+		// 思考过程、工具调用参数、工具输出都不参与，搜出来那些也没人要看。
 		if strings.Contains(asciiLower(t.Prompt), needle) {
 			out = append(out, TurnSearchHit{Turn: t.Index, Role: "user", Snippet: snippetAround(t.Prompt, q, 160)})
 			continue
 		}
 		found := false
 		for _, m := range t.Messages {
+			if m.Role != "assistant" {
+				continue
+			}
 			for _, b := range m.Blocks {
-				if strings.Contains(asciiLower(b.Text), needle) || strings.Contains(asciiLower(b.Summary), needle) {
-					out = append(out, TurnSearchHit{
-						Turn: t.Index, Role: m.Role,
-						Snippet: snippetAround(firstNonEmpty(b.Text, b.Summary), q, 160),
-					})
-					found = true
-					break
+				if b.Kind != "text" || !strings.Contains(asciiLower(b.Text), needle) {
+					continue
 				}
+				out = append(out, TurnSearchHit{
+					Turn: t.Index, Role: "assistant",
+					Snippet: snippetAround(b.Text, q, 160),
+				})
+				found = true
+				break
 			}
 			if found {
 				break

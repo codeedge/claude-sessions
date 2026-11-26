@@ -345,6 +345,16 @@ function renderFoot() {
     (buildLabel ? `<br>构建 ${esc(buildLabel)}` : '');
 }
 
+// 页面"闲着"才允许自动刷新：没有正在跑的回复、输入框是空的、没有弹窗
+function canAutoReload() {
+  if (CHAT.live) return false;
+  if (document.querySelector('dialog[open]')) return false;
+  const ta = $('#c-input');
+  if (ta && ta.value.trim()) return false;
+  if (ATTACH.length) return false;
+  return true;
+}
+
 async function checkBuild() {
   try {
     const v = await api('/api/version');
@@ -355,6 +365,13 @@ async function checkBuild() {
       return;
     }
     if (v.build !== serverBuild) {
+      // 服务端重启后前端还是旧的：页面闲着就自动刷新，省得对着旧代码报 bug；
+      // 正在聊天 / 有没发出去的输入 / 有弹窗开着，就只提示不打扰
+      if (canAutoReload()) {
+        serverBuild = v.build;
+        location.reload();
+        return;
+      }
       $('#stale-bar').hidden = false;
     }
   } catch {

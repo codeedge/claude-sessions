@@ -468,10 +468,10 @@ function init() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { closeImageViewer(); closePanel(); }
   });
-  $('#jump-top').addEventListener('click', () => $('#main').scrollTo({ top: 0, behavior: 'smooth' }));
+  $('#jump-top').addEventListener('click', () => $('#main').scrollTo({ top: 0, behavior: 'auto' }));
   $('#jump-bottom').addEventListener('click', () => {
     const m = $('#main');
-    m.scrollTo({ top: m.scrollHeight, behavior: 'smooth' });
+    m.scrollTo({ top: m.scrollHeight, behavior: 'auto' });
   });
   $('#main').addEventListener('scroll', updateJumpNav, { passive: true });
   window.addEventListener('resize', updateJumpNav);
@@ -2236,7 +2236,11 @@ async function jumpToTurn(n, smooth = true) {
   // turn header we just jumped to.
   const main = $('#main');
   const offset = el.getBoundingClientRect().top - main.getBoundingClientRect().top;
-  main.scrollTo({ top: main.scrollTop + offset - 128, behavior: smooth ? 'smooth' : 'auto' });
+  const top = main.scrollTop + offset - 128;
+  // 平滑滚动是按距离算时长的，跳几百轮那种一次要滚一两秒；
+  // 距离远就直接落位，近的才用平滑动画
+  const far = Math.abs(top - main.scrollTop) > 1200;
+  main.scrollTo({ top, behavior: smooth && !far ? 'smooth' : 'auto' });
   if (S.detailId) setHash(S.detailId, S.agent, n);
   el.classList.remove('flash');
   void el.offsetWidth;

@@ -530,7 +530,6 @@ func (ix *Index) refreshRunning() {
 	ix.runningMu.Unlock()
 
 	live := map[string]bool{}
-	interactive := map[string]bool{}
 	files, _ := os.ReadDir(filepath.Join(ix.home, "sessions"))
 	for _, f := range files {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
@@ -543,16 +542,12 @@ func (ix *Index) refreshRunning() {
 		var s struct {
 			PID       int    `json:"pid"`
 			SessionID string `json:"sessionId"`
-			Kind      string `json:"kind"`
 		}
 		if json.Unmarshal(b, &s) != nil || s.SessionID == "" {
 			continue
 		}
 		if processAlive(s.PID) {
 			live[s.SessionID] = true
-			if s.Kind == "interactive" {
-				interactive[s.SessionID] = true
-			}
 		}
 	}
 
@@ -564,7 +559,6 @@ func (ix *Index) refreshRunning() {
 	ix.mu.Lock()
 	for id, s := range ix.sessions {
 		s.Running = live[id]
-		s.CLIOpen = interactive[id]
 	}
 	ix.mu.Unlock()
 }

@@ -3067,20 +3067,6 @@ async function sendChat() {
     return;
   }
 
-  // 终端里开着同一个会话时，两边一起写会把会话文件岔成两条分支，
-  // 终端只认其中一条，网页发的那些它就永远看不到。先问一句。
-  if (d.cliOpen && !S.cliWarned) {
-    const ok = await confirmDialog(
-      '终端里还开着这个会话',
-      '终端里的 claude 只在启动时读一次会话文件，之后不监听变化。两边同时发消息，' +
-      '这个会话会被写成两条分支：终端只显示它自己那条，网页发的消息它就看不到了。\n\n' +
-      '建议先在终端退出（Ctrl+C 两次），再在这里发。要继续吗？',
-      '仍然发送',
-    );
-    if (!ok) { setComposerValue(text); return; }
-    S.cliWarned = true;
-  }
-
   // /branch、/fork 是「把当前对话复制出一条新会话」，网页版直接切过去，
   // 下一条消息用 --fork-session 写进新会话（CLI 里这两个命令本来就是同一件事）
   const bm = /^\/(?:branch|fork)(?:\s+(.*))?$/.exec(text);
@@ -3207,9 +3193,9 @@ function renderChatStatus() {
   const age = sessionAge();
   if (age) info.push(`<span class="cs-age" title="会话开始于 ${esc(abs(d.createdAt))}">${esc(age)}</span>`);
 
-  // 终端里还开着这个会话：那边不会自动看到网页这边发的内容
-  if (d.cliOpen) {
-    info.push(`<span class="cs-cli" title="终端里的 claude 只在启动时读一次会话文件，网页这里发的消息它看不到。想同步：在终端退出后重新 claude --resume ${esc(d.id)}">终端也开着</span>`);
+  // 这个会话正在跑（我们的进程或终端里的都算）
+  if (d.running) {
+    info.push('<span class="cs-running" title="这个会话有进程正在运行">运行中</span>');
   }
 
   // 模型/强度/权限就在下面的下拉里，这里不再重复；只补本轮用量

@@ -1593,15 +1593,18 @@ function renderPanelTabs() {
         <span class="pc-n">${esc(secs)}</span>
       </button>`);
   }
-  for (const a of subs) {
+  subs.forEach((a, i) => {
     // 名字用它的描述（派发时写的那句话），比清一色的 "fork" 有用
     const label = (a.description || '').trim() || a.agentType || 'agent';
-    chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc((a.description || '') + (a.agentType ? ' · ' + a.agentType : '') + ' · ' + a.msgs + ' 条')}">
+    const when = a.startedAt ? abs(a.startedAt) : '';
+    const tip = `第 ${i + 1} 个（按派发时间排）· ${when ? when + ' 派发 · ' : ''}${a.agentType || 'agent'} · ${a.msgs} 条消息`;
+    chips.push(`<button class="panel-chip" data-panel="agent:${esc(a.id)}" title="${esc(tip)}">
+        <span class="pc-idx">${i + 1}</span>
         <span class="pc-kind">子代理</span>
         <span class="pc-name">${esc(truncate(label, 20))}</span>
         <span class="pc-n">${a.msgs}</span>
       </button>`);
-  }
+  });
   for (const sh of shells) {
     chips.push(`<button class="panel-chip shell" data-panel="shell:${esc(sh.id)}" title="${esc(sh.command || '')}">
         <span class="pc-kind">shell</span>

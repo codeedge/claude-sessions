@@ -62,6 +62,7 @@ type SubagentRef struct {
 	AgentType   string `json:"agentType"`
 	Description string `json:"description"`
 	Msgs        int    `json:"msgs"`
+	StartedAt   string `json:"startedAt,omitempty"` // 派发时间（首条记录的时间）
 	Path        string `json:"-"`
 }
 

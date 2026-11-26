@@ -1134,6 +1134,7 @@ dialog .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; 
 .panel-chip:hover { border-color: var(--branch); color: var(--fg); }
 .panel-chip.on { border-color: var(--branch); background: color-mix(in srgb, var(--branch) 18%, transparent); color: var(--fg); }
 .pc-kind { color: var(--branch); font-size: 10.5px; }
+.pc-idx { color: var(--fg-faint); font-size: 10px; font-variant-numeric: tabular-nums; }
 .panel-chip.shell .pc-kind { color: var(--accent); }
 .pc-n { color: var(--fg-faint); font-size: 10.5px; }
 

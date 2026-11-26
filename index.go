@@ -481,6 +481,7 @@ func readSubagents(sessionDir string) []SubagentRef {
 		path := filepath.Join(subDir, f.Name())
 		ref := SubagentRef{ID: id, Path: path}
 		started[id] = firstTimestamp(path)
+		ref.StartedAt = started[id]
 
 		metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
 		if b, err := os.ReadFile(metaPath); err == nil {
